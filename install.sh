@@ -340,12 +340,48 @@ init_admin() {
     log_info "初始化管理员账号..."
 
     # 等待数据库完全就绪
-    sleep 5
+    log_info "等待数据库就绪..."
+    sleep 10
 
-    # 在后端容器中执行初始化
-    docker compose exec -T backend ./license-server -config /app/config.yaml -init-admin || true
+    # 使用 Python 生成 bcrypt 密码哈希
+    log_info "生成密码哈希..."
+    PASSWORD_HASH=$(docker run --rm python:3-alpine sh -c "pip install -q bcrypt && python -c \"import bcrypt; print(bcrypt.hashpw(b'${ADMIN_PASSWORD}', bcrypt.gensalt(10)).decode())\"" 2>/dev/null)
 
-    log_success "管理员账号初始化完成"
+    if [ -z "$PASSWORD_HASH" ]; then
+        log_error "无法生成密码哈希"
+        return 1
+    fi
+
+    log_info "创建租户和管理员账号..."
+
+    # 通过 MySQL 容器创建租户和管理员
+    docker exec license-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" license_server -e "
+    -- 检查是否已存在租户
+    SET @tenant_exists = (SELECT COUNT(*) FROM tenants WHERE slug = 'default');
+
+    -- 如果不存在则创建租户
+    SET @tenant_id = UUID();
+    INSERT INTO tenants (id, name, slug, plan, status, created_at, updated_at)
+    SELECT @tenant_id, '默认团队', 'default', 'professional', 'active', NOW(), NOW()
+    WHERE @tenant_exists = 0;
+
+    -- 获取租户 ID（无论是新建还是已存在）
+    SET @final_tenant_id = (SELECT id FROM tenants WHERE slug = 'default' LIMIT 1);
+
+    -- 检查管理员是否已存在
+    SET @admin_exists = (SELECT COUNT(*) FROM team_members WHERE email = '${ADMIN_EMAIL}');
+
+    -- 如果不存在则创建管理员
+    INSERT INTO team_members (id, tenant_id, email, password, name, role, status, created_at, updated_at, email_verified)
+    SELECT UUID(), @final_tenant_id, '${ADMIN_EMAIL}', '${PASSWORD_HASH}', '管理员', 'owner', 'active', NOW(), NOW(), 1
+    WHERE @admin_exists = 0;
+    " 2>/dev/null
+
+    if [ $? -eq 0 ]; then
+        log_success "管理员账号初始化完成"
+    else
+        log_warning "管理员账号可能已存在或创建失败，请检查"
+    fi
 }
 
 # 配置防火墙
