@@ -208,6 +208,25 @@ interactive_config() {
     read -p "后端端口 [8080]: " BACKEND_PORT
     BACKEND_PORT=${BACKEND_PORT:-8080}
 
+    # Nginx 反向代理选项（仅当使用非标准端口时提示）
+    ENABLE_NGINX_PROXY="no"
+    if [ "$SSL_MODE" != "http" ] && [ "$HTTPS_PORT" != "443" ]; then
+        echo ""
+        echo "=========================================="
+        echo "         Nginx 反向代理配置"
+        echo "=========================================="
+        echo ""
+        echo "  当前 HTTPS 端口: $HTTPS_PORT"
+        echo "  如果启用反向代理，可以通过标准 443 端口访问"
+        echo "  访问地址将变为: https://${DOMAIN:-$SERVER_IP}"
+        echo ""
+        read -p "是否启用 Nginx 反向代理? [y/N]: " NGINX_CHOICE
+        if [ "$NGINX_CHOICE" = "y" ] || [ "$NGINX_CHOICE" = "Y" ]; then
+            ENABLE_NGINX_PROXY="yes"
+            log_info "将配置 Nginx 反向代理"
+        fi
+    fi
+
     # 管理员配置
     echo ""
     read -p "管理员邮箱 [admin@example.com]: " ADMIN_EMAIL
@@ -559,14 +578,122 @@ configure_firewall() {
     if command -v ufw &> /dev/null; then
         ufw allow ${HTTP_PORT}/tcp
         [ -n "$HTTPS_PORT" ] && ufw allow ${HTTPS_PORT}/tcp
+        # 如果启用了 Nginx 反代，开放标准端口
+        if [ "$ENABLE_NGINX_PROXY" = "yes" ]; then
+            ufw allow 80/tcp
+            ufw allow 443/tcp
+        fi
         log_success "UFW 防火墙规则已添加"
     elif command -v firewall-cmd &> /dev/null; then
         firewall-cmd --permanent --add-port=${HTTP_PORT}/tcp
         [ -n "$HTTPS_PORT" ] && firewall-cmd --permanent --add-port=${HTTPS_PORT}/tcp
+        if [ "$ENABLE_NGINX_PROXY" = "yes" ]; then
+            firewall-cmd --permanent --add-port=80/tcp
+            firewall-cmd --permanent --add-port=443/tcp
+        fi
         firewall-cmd --reload
         log_success "Firewalld 防火墙规则已添加"
     else
         log_warning "未检测到防火墙，请手动配置"
+    fi
+}
+
+# 安装和配置 Nginx 反向代理
+install_nginx_proxy() {
+    if [ "$ENABLE_NGINX_PROXY" != "yes" ]; then
+        return 0
+    fi
+
+    log_info "安装 Nginx 反向代理..."
+
+    # 安装 Nginx
+    if command -v nginx &> /dev/null; then
+        log_success "Nginx 已安装"
+    else
+        log_info "正在安装 Nginx..."
+        apt-get update
+        apt-get install -y nginx
+        log_success "Nginx 安装完成"
+    fi
+
+    # 确定 SSL 证书路径
+    if [ "$SSL_MODE" = "letsencrypt" ]; then
+        SSL_CERT="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+        SSL_KEY="/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
+    else
+        SSL_CERT="$(pwd)/certs/ssl/server.crt"
+        SSL_KEY="$(pwd)/certs/ssl/server.key"
+    fi
+
+    # 创建 Nginx 配置
+    log_info "创建 Nginx 反代配置..."
+    cat > /etc/nginx/sites-available/license-server << EOF
+# License Server Nginx 反向代理配置
+# 生成时间: $(date '+%Y-%m-%d %H:%M:%S')
+
+# HTTP -> HTTPS 重定向
+server {
+    listen 80;
+    server_name ${DOMAIN:-$SERVER_IP};
+    return 301 https://\$server_name\$request_uri;
+}
+
+# HTTPS 反向代理
+server {
+    listen 443 ssl http2;
+    server_name ${DOMAIN:-$SERVER_IP};
+
+    # SSL 证书
+    ssl_certificate ${SSL_CERT};
+    ssl_certificate_key ${SSL_KEY};
+
+    # SSL 优化配置
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # 安全头
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # 反向代理到 Docker 容器
+    location / {
+        proxy_pass https://127.0.0.1:${HTTPS_PORT};
+        proxy_ssl_verify off;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+
+        # WebSocket 支持
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+
+        # 缓冲设置
+        proxy_buffering off;
+        proxy_buffer_size 4k;
+    }
+}
+EOF
+
+    # 启用配置
+    ln -sf /etc/nginx/sites-available/license-server /etc/nginx/sites-enabled/
+    rm -f /etc/nginx/sites-enabled/default
+
+    # 测试并重启 Nginx
+    if nginx -t; then
+        systemctl restart nginx
+        systemctl enable nginx
+        log_success "Nginx 反向代理配置完成"
+    else
+        log_error "Nginx 配置测试失败，请检查配置"
+        return 1
     fi
 }
 
@@ -577,6 +704,9 @@ save_credentials() {
     # 确定访问地址
     if [ "$SSL_MODE" = "http" ]; then
         FRONTEND_URL="http://${SERVER_IP}:${HTTP_PORT}"
+        BACKEND_URL="http://${SERVER_IP}:${BACKEND_PORT}"
+    elif [ "$ENABLE_NGINX_PROXY" = "yes" ]; then
+        FRONTEND_URL="https://${DOMAIN:-$SERVER_IP}"
         BACKEND_URL="http://${SERVER_IP}:${BACKEND_PORT}"
     else
         FRONTEND_URL="https://${DOMAIN:-$SERVER_IP}:${HTTPS_PORT}"
@@ -598,13 +728,15 @@ save_credentials() {
 SSL 模式:     ${SSL_MODE}
 $([ "$SSL_MODE" = "letsencrypt" ] && echo "域名:         ${DOMAIN}")
 $([ "$SSL_MODE" = "self-signed" ] && echo "注意:         自签名证书，浏览器会显示安全警告")
+$([ "$ENABLE_NGINX_PROXY" = "yes" ] && echo "Nginx 反代:   已启用（标准 443 端口）")
 
 ═══════════════════════════════════════════════════════════════════════════
                               访问地址
 ═══════════════════════════════════════════════════════════════════════════
 
 前端管理后台: ${FRONTEND_URL}
-后端 API 地址: ${BACKEND_URL}
+客户端 API:   ${FRONTEND_URL}/api/client
+后端直连端口: ${BACKEND_PORT}
 
 ═══════════════════════════════════════════════════════════════════════════
                             管理员账号
@@ -659,6 +791,8 @@ print_completion() {
     # 确定访问地址
     if [ "$SSL_MODE" = "http" ]; then
         FRONTEND_URL="http://${SERVER_IP}:${HTTP_PORT}"
+    elif [ "$ENABLE_NGINX_PROXY" = "yes" ]; then
+        FRONTEND_URL="https://${DOMAIN:-$SERVER_IP}"
     else
         FRONTEND_URL="https://${DOMAIN:-$SERVER_IP}:${HTTPS_PORT}"
     fi
@@ -673,7 +807,11 @@ print_completion() {
     echo -e "${NC}"
     echo ""
     echo -e "  ${BLUE}SSL 模式:${NC}     ${SSL_MODE}"
+    if [ "$ENABLE_NGINX_PROXY" = "yes" ]; then
+        echo -e "  ${BLUE}Nginx 反代:${NC}   已启用"
+    fi
     echo -e "  ${BLUE}前端管理后台:${NC} ${FRONTEND_URL}"
+    echo -e "  ${BLUE}客户端 API:${NC}   ${FRONTEND_URL}/api/client"
     echo ""
     echo -e "  ${BLUE}管理员邮箱:${NC}   ${ADMIN_EMAIL}"
     echo -e "  ${BLUE}管理员密码:${NC}   ${ADMIN_PASSWORD}"
@@ -704,6 +842,7 @@ main() {
     generate_ssl_cert
     start_services
     init_admin
+    install_nginx_proxy
     configure_firewall
     save_credentials
     print_completion
