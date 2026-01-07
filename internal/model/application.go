@@ -102,6 +102,7 @@ type HotUpdate struct {
 	AppID           string          `gorm:"type:varchar(36);not null;index" json:"app_id"`
 	FromVersion     string          `gorm:"type:varchar(20);not null" json:"from_version"`      // 源版本（* 表示任意版本）
 	ToVersion       string          `gorm:"type:varchar(20);not null" json:"to_version"`        // 目标版本
+	VersionCode     int             `gorm:"default:0" json:"version_code"`                      // 版本代码
 	PatchType       HotUpdateType   `gorm:"type:varchar(20);default:full" json:"patch_type"`    // 更新类型
 	UpdateMode      string          `gorm:"type:varchar(20);default:mixed" json:"update_mode"`  // 更新模式: exe/script/resource/mixed
 	PatchURL        string          `gorm:"type:varchar(500)" json:"patch_url"`                 // 补丁下载地址

@@ -27,15 +27,19 @@ func NewHotUpdateHandler() *HotUpdateHandler {
 
 // CreateRequest 创建热更新请求
 type CreateHotUpdateRequest struct {
-	FromVersion   string `json:"from_version" binding:"required"`
-	ToVersion     string `json:"to_version" binding:"required"`
-	PatchType     string `json:"patch_type"`
-	Changelog     string `json:"changelog"`
-	ForceUpdate   bool   `json:"force_update"`
-	MinAppVersion string `json:"min_app_version"`
+	FromVersion       string `json:"from_version" form:"from_version"`
+	ToVersion         string `json:"to_version" form:"to_version"`
+	VersionCode       int    `json:"version_code" form:"version_code"`
+	PatchType         string `json:"patch_type" form:"update_type"`
+	UpdateMode        string `json:"update_mode" form:"update_mode"`
+	Changelog         string `json:"changelog" form:"changelog"`
+	ForceUpdate       bool   `json:"force_update" form:"force_update"`
+	RestartRequired   bool   `json:"restart_required" form:"restart_required"`
+	RolloutPercentage int    `json:"rollout_percentage" form:"rollout_percentage"`
+	MinAppVersion     string `json:"min_app_version" form:"min_app_version"`
 }
 
-// Create 创建热更新记录
+// Create 创建热更新记录（支持同时上传文件）
 func (h *HotUpdateHandler) Create(c *gin.Context) {
 	appID := c.Param("id")
 
@@ -45,39 +49,110 @@ func (h *HotUpdateHandler) Create(c *gin.Context) {
 		return
 	}
 
-	var req CreateHotUpdateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "参数错误: "+err.Error())
+	// 获取表单字段
+	version := c.PostForm("version")
+	versionCodeStr := c.PostForm("version_code")
+	updateType := c.PostForm("update_type")
+	updateMode := c.PostForm("update_mode")
+	changelog := c.PostForm("changelog")
+	rolloutStr := c.PostForm("rollout_percentage")
+	forceUpdate := c.PostForm("force_update") == "true"
+	restartRequired := c.PostForm("restart_required") == "true"
+	minAppVersion := c.PostForm("min_app_version")
+
+	// 验证必填字段
+	if version == "" {
+		response.BadRequest(c, "版本号不能为空")
 		return
+	}
+
+	versionCode, _ := strconv.Atoi(versionCodeStr)
+	rolloutPercentage, _ := strconv.Atoi(rolloutStr)
+	if rolloutPercentage <= 0 {
+		rolloutPercentage = 100
+	}
+
+	// 确定更新类型
+	patchType := model.HotUpdateTypeFull
+	if updateType == "patch" {
+		patchType = model.HotUpdateTypePatch
 	}
 
 	// 检查是否已存在相同版本的热更新
 	var existing model.HotUpdate
-	if err := model.DB.Where("app_id = ? AND from_version = ? AND to_version = ?",
-		appID, req.FromVersion, req.ToVersion).First(&existing).Error; err == nil {
+	if err := model.DB.Where("app_id = ? AND to_version = ?",
+		appID, version).First(&existing).Error; err == nil {
 		response.Error(c, 400, "该版本热更新已存在")
 		return
 	}
 
-	patchType := model.HotUpdateTypeFull
-	if req.PatchType == "patch" {
-		patchType = model.HotUpdateTypePatch
-	}
-
 	hotUpdate := model.HotUpdate{
 		AppID:          appID,
-		FromVersion:    req.FromVersion,
-		ToVersion:      req.ToVersion,
+		FromVersion:    "*", // 默认从任意版本更新
+		ToVersion:      version,
+		VersionCode:    versionCode,
 		PatchType:      patchType,
-		Changelog:      req.Changelog,
-		ForceUpdate:    req.ForceUpdate,
-		MinAppVersion:  req.MinAppVersion,
-		RolloutPercent: 100,
+		UpdateMode:     updateMode,
+		Changelog:      changelog,
+		ForceUpdate:    forceUpdate,
+		RestartRequired: restartRequired,
+		MinAppVersion:  minAppVersion,
+		RolloutPercent: rolloutPercentage,
 		Status:         model.HotUpdateStatusDraft,
 	}
 
+	// 检查是否有上传文件
+	file, header, err := c.Request.FormFile("file")
+	if err == nil {
+		defer file.Close()
+
+		// 读取文件内容
+		content, err := io.ReadAll(file)
+		if err != nil {
+			response.ServerError(c, "读取文件失败")
+			return
+		}
+
+		// 计算哈希
+		hash := sha256.Sum256(content)
+		fileHash := hex.EncodeToString(hash[:])
+		fileSize := int64(len(content))
+
+		// 保存文件
+		cfg := config.Get()
+		hotUpdateDir := filepath.Join(cfg.Storage.ReleasesDir, "hotupdate")
+		os.MkdirAll(hotUpdateDir, 0755)
+
+		uploadType := "full"
+		if updateType == "patch" {
+			uploadType = "patch"
+		}
+
+		filename := fmt.Sprintf("%s_%s_to_%s_%s%s",
+			app.AppKey, "*", version, uploadType, filepath.Ext(header.Filename))
+		filePath := filepath.Join(hotUpdateDir, filename)
+
+		if err := os.WriteFile(filePath, content, 0644); err != nil {
+			response.ServerError(c, "保存文件失败")
+			return
+		}
+
+		downloadURL := fmt.Sprintf("/api/client/hotupdate/download/%s", filename)
+
+		// 设置文件信息
+		if uploadType == "patch" {
+			hotUpdate.PatchURL = downloadURL
+			hotUpdate.PatchSize = fileSize
+			hotUpdate.PatchHash = fileHash
+		} else {
+			hotUpdate.FullURL = downloadURL
+			hotUpdate.FullSize = fileSize
+			hotUpdate.FullHash = fileHash
+		}
+	}
+
 	if err := model.DB.Create(&hotUpdate).Error; err != nil {
-		response.ServerError(c, "创建热更新失败")
+		response.ServerError(c, "创建热更新失败: "+err.Error())
 		return
 	}
 
