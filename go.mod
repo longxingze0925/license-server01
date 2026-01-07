@@ -1,6 +1,6 @@
 module license-server
 
-go 1.25.4
+go 1.21
 
 require (
 	github.com/gin-gonic/gin v1.11.0
