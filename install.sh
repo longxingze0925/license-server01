@@ -354,8 +354,8 @@ init_admin() {
 
     log_info "创建租户和管理员账号..."
 
-    # 通过 MySQL 容器创建租户和管理员
-    docker exec license-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" license_server -e "
+    # 通过 MySQL 容器创建租户和管理员（使用 utf8mb4 字符集）
+    docker exec license-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" --default-character-set=utf8mb4 license_server -e "
     -- 检查是否已存在租户
     SET @tenant_exists = (SELECT COUNT(*) FROM tenants WHERE slug = 'default');
 
