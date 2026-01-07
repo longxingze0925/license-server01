@@ -128,8 +128,8 @@ func (h *HotUpdateHandler) Create(c *gin.Context) {
 			uploadType = "patch"
 		}
 
-		filename := fmt.Sprintf("%s_%s_to_%s_%s%s",
-			app.AppKey, "*", version, uploadType, filepath.Ext(header.Filename))
+		filename := fmt.Sprintf("%s_any_to_%s_%s%s",
+			app.AppKey, version, uploadType, filepath.Ext(header.Filename))
 		filePath := filepath.Join(hotUpdateDir, filename)
 
 		if err := os.WriteFile(filePath, content, 0644); err != nil {
