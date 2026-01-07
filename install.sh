@@ -354,15 +354,19 @@ init_admin() {
 
     log_info "创建租户和管理员账号..."
 
-    # 通过 MySQL 容器创建租户和管理员（使用 utf8mb4 字符集）
+    # 中文字符的 UTF-8 十六进制编码（避免终端编码问题）
+    # "默认团队" = E9BB98E8AEA4E59BA2E9989F
+    # "管理员" = E7AEA1E79086E59198
+
+    # 通过 MySQL 容器创建租户和管理员（使用十六进制避免编码问题）
     docker exec license-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" --default-character-set=utf8mb4 license_server -e "
     -- 检查是否已存在租户
     SET @tenant_exists = (SELECT COUNT(*) FROM tenants WHERE slug = 'default');
 
-    -- 如果不存在则创建租户
+    -- 如果不存在则创建租户（使用十六进制存储中文）
     SET @tenant_id = UUID();
     INSERT INTO tenants (id, name, slug, plan, status, created_at, updated_at)
-    SELECT @tenant_id, '默认团队', 'default', 'professional', 'active', NOW(), NOW()
+    SELECT @tenant_id, X'E9BB98E8AEA4E59BA2E9989F', 'default', 'professional', 'active', NOW(), NOW()
     WHERE @tenant_exists = 0;
 
     -- 获取租户 ID（无论是新建还是已存在）
@@ -371,9 +375,9 @@ init_admin() {
     -- 检查管理员是否已存在
     SET @admin_exists = (SELECT COUNT(*) FROM team_members WHERE email = '${ADMIN_EMAIL}');
 
-    -- 如果不存在则创建管理员
+    -- 如果不存在则创建管理员（使用十六进制存储中文）
     INSERT INTO team_members (id, tenant_id, email, password, name, role, status, created_at, updated_at, email_verified)
-    SELECT UUID(), @final_tenant_id, '${ADMIN_EMAIL}', '${PASSWORD_HASH}', '管理员', 'owner', 'active', NOW(), NOW(), 1
+    SELECT UUID(), @final_tenant_id, '${ADMIN_EMAIL}', '${PASSWORD_HASH}', X'E7AEA1E79086E59198', 'owner', 'active', NOW(), NOW(), 1
     WHERE @admin_exists = 0;
     " 2>/dev/null
 
