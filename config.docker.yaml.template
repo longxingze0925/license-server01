@@ -1,0 +1,73 @@
+# License Server Docker 配置文件
+# 此文件由一键安装脚本自动生成，请勿手动修改
+# 敏感信息从环境变量读取
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "release"
+  tls:
+    enabled: false
+    cert_file: "/app/certs/server.crt"
+    key_file: "/app/certs/server.key"
+
+database:
+  driver: "mysql"
+  host: "mysql"
+  port: 3306
+  username: "license_admin"
+  password: "${MYSQL_PASSWORD}"
+  database: "license_server"
+  charset: "utf8mb4"
+  max_idle_conns: 10
+  max_open_conns: 100
+
+redis:
+  host: "redis"
+  port: 6379
+  password: "${REDIS_PASSWORD}"
+  db: 0
+
+jwt:
+  secret: "${JWT_SECRET}"
+  expire_hours: 24
+
+rsa:
+  key_size: 2048
+
+storage:
+  scripts_dir: "/app/storage/scripts"
+  releases_dir: "/app/storage/releases"
+
+log:
+  level: "info"
+  file: "/app/logs/app.log"
+  max_size: 100
+  max_backups: 5
+  max_age: 30
+
+email:
+  enabled: false
+  smtp_host: "smtp.example.com"
+  smtp_port: 587
+  username: ""
+  password: ""
+  from: "noreply@example.com"
+
+security:
+  max_login_attempts: 5
+  login_lock_minutes: 15
+  ip_max_attempts: 20
+  ip_lock_minutes: 30
+  password_min_length: 8
+  password_require_num: true
+  password_require_sym: true
+  csrf_enabled: false
+  csrf_token_expiry: 60
+  csrf_cookie_name: "csrf_token"
+  enable_security_headers: true
+  allowed_origins:
+    - "http://${SERVER_IP}:80"
+    - "https://${SERVER_IP}:443"
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"

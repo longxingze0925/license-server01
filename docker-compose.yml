@@ -1,0 +1,121 @@
+# ============================================
+# License Server Docker Compose 配置
+# ============================================
+# 使用方法：
+#   1. 复制 .env.example 为 .env 并修改配置
+#   2. 运行: docker compose up -d
+# ============================================
+
+services:
+  # ===== MySQL 数据库 =====
+  mysql:
+    image: mysql:8.0
+    container_name: license-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-license_server}
+      MYSQL_USER: ${MYSQL_USER:-license_admin}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    networks:
+      - license-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+
+  # ===== Redis 缓存 =====
+  redis:
+    image: redis:7-alpine
+    container_name: license-redis
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    command: redis-server --appendonly yes --requirepass "${REDIS_PASSWORD}"
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - license-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===== 后端 API 服务 =====
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.backend
+    container_name: license-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./config.docker.yaml:/app/config.yaml:ro
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+      - ./certs:/app/certs:ro
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    networks:
+      - license-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ===== 前端服务 =====
+  frontend:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    container_name: license-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    networks:
+      - license-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ===== 数据卷 =====
+volumes:
+  mysql_data:
+    name: license-mysql-data
+  redis_data:
+    name: license-redis-data
+
+# ===== 网络 =====
+networks:
+  license-network:
+    name: license-network
+    driver: bridge

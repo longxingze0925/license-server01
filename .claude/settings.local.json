@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__chrome__chrome_navigate",
+      "mcp__chrome__chrome_screenshot",
+      "mcp__chrome__chrome_get_web_content",
+      "mcp__chrome__chrome_get_interactive_elements",
+      "mcp__chrome__chrome_click_element",
+      "mcp__chrome__chrome_fill_or_select",
+      "Bash(go build:*)",
+      "WebSearch",
+      "Bash(dir /s /b C:Users1Desktopads-scriptsads-automationscripts*.py)",
+      "Bash(dir:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(go get:*)",
+      "Bash(del \"C:\\\\Users\\\\1\\\\Desktop\\\\用户管理系统\\\\sdk\\\\go\\\\client.go\")",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(npm install:*)",
+      "Bash(curl:*)",
+      "Bash(powershell:*)",
+      "Bash(npm run build)",
+      "Bash(npx tsc:*)",
+      "Bash(tree:*)",
+      "Bash(sc query:*)",
+      "Bash(findstr:*)",
+      "Bash(net start:*)",
+      "Bash(mysql:*)",
+      "Bash(where:*)",
+      "Bash(\"C:\\\\Program Files\\\\MySQL\\\\MySQL Server 8.0\\\\bin\\\\mysql.exe\":*)",
+      "Bash(sqlite3:*)",
+      "Bash(go test:*)",
+      "Bash(del \"C:\\\\Users\\\\1\\\\Desktop\\\\用户管理系统\\\\admin\\\\src\\\\pages\\\\Users.tsx\")",
+      "Bash(del \"C:\\\\Users\\\\1\\\\Desktop\\\\用户管理系统\\\\admin\\\\src\\\\pages\\\\ClientUsers.tsx\")",
+      "Bash(del \"C:\\\\Users\\\\1\\\\Desktop\\\\用户管理系统\\\\admin\\\\src\\\\pages\\\\Organizations.tsx\")",
+      "Bash(net stop:*)",
+      "Bash(\"C:\\\\Program Files\\\\MySQL\\\\MySQL Server 8.0\\\\bin\\\\mysql.exe\" -u root -pRoot123456 license_server -e \"\nSET FOREIGN_KEY_CHECKS = 0;\n\n-- 清理业务数据表\nTRUNCATE TABLE app_releases;\nTRUNCATE TABLE applications;\nTRUNCATE TABLE audit_logs;\nTRUNCATE TABLE customers;\nTRUNCATE TABLE device_blacklist;\nTRUNCATE TABLE device_connections;\nTRUNCATE TABLE devices;\nTRUNCATE TABLE heartbeats;\nTRUNCATE TABLE hot_update_logs;\nTRUNCATE TABLE hot_updates;\nTRUNCATE TABLE license_events;\nTRUNCATE TABLE licenses;\nTRUNCATE TABLE notifications;\nTRUNCATE TABLE realtime_instructions;\nTRUNCATE TABLE script_deliveries;\nTRUNCATE TABLE scripts;\nTRUNCATE TABLE secure_scripts;\nTRUNCATE TABLE subscriptions;\nTRUNCATE TABLE webhook_logs;\nTRUNCATE TABLE webhooks;\n\n-- 清理团队邀请\nTRUNCATE TABLE team_invitations;\n\n-- 删除非 admin 的团队成员\nDELETE FROM team_members WHERE email != ''admin@example.com'';\n\n-- 修复 admin 账号的名称（中文乱码问题）\nUPDATE team_members SET name = ''管理员'' WHERE email = ''admin@example.com'';\n\n-- 修复租户名称\nUPDATE tenants SET name = ''默认团队'', slug = ''default'' WHERE id = ''f5b3c6be-e9a6-11f0-a2d2-30560f14e1de'';\n\n-- 升级为企业版（无限制）\nUPDATE tenants SET plan = ''enterprise'' WHERE id = ''f5b3c6be-e9a6-11f0-a2d2-30560f14e1de'';\n\nSET FOREIGN_KEY_CHECKS = 1;\n\nSELECT ''清理完成'' as status;\n\")",
+      "Bash(taskkill:*)",
+      "Bash(start:*)",
+      "Bash(netstat:*)",
+      "Bash(del \"C:\\\\Users\\\\1\\\\Desktop\\\\用户管理系统\\\\admin\\\\src\\\\pages\\\\Settings.tsx\")",
+      "Bash(go run:*)",
+      "WebFetch(domain:ant.design)",
+      "Bash(git init:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "agentvibes"
+  ]
+}

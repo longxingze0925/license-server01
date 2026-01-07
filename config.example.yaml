@@ -1,0 +1,94 @@
+# 配置文件示例 - 生产环境部署指南
+# 复制此文件为 config.yaml 并修改相应配置
+# 重要：请勿将包含真实密码的 config.yaml 提交到版本控制！
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "release"  # debug, release - 生产环境必须使用 release
+  tls:
+    enabled: true  # 生产环境必须启用 HTTPS
+    cert_file: "./certs/server.crt"  # SSL 证书路径
+    key_file: "./certs/server.key"   # SSL 私钥路径
+
+database:
+  driver: "mysql"
+  host: "localhost"
+  port: 3306
+  username: "license_admin"  # 使用专用数据库用户，避免使用 root
+  password: "${DB_PASSWORD}"  # 从环境变量读取，或替换为强密码
+  database: "license_server"
+  charset: "utf8mb4"
+  max_idle_conns: 10
+  max_open_conns: 100
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: "${REDIS_PASSWORD}"  # 从环境变量读取，或替换为强密码
+  db: 0
+
+jwt:
+  # 生成强密钥命令: openssl rand -base64 32
+  secret: "${JWT_SECRET}"  # 从环境变量读取，至少32字符
+  expire_hours: 24
+
+rsa:
+  key_size: 2048  # RSA 密钥长度，建议 2048 或 4096
+
+storage:
+  scripts_dir: "./storage/scripts"
+  releases_dir: "./storage/releases"
+
+log:
+  level: "info"  # debug, info, warn, error
+  file: "./logs/app.log"
+  max_size: 100      # 单个日志文件最大 MB
+  max_backups: 5     # 保留的旧日志文件数
+  max_age: 30        # 日志保留天数
+
+email:
+  enabled: false
+  smtp_host: "smtp.example.com"
+  smtp_port: 587
+  username: ""
+  password: ""
+  from: "noreply@example.com"
+
+security:
+  # 登录安全
+  max_login_attempts: 5       # 最大登录尝试次数
+  login_lock_minutes: 15      # 登录锁定时间（分钟）
+  ip_max_attempts: 20         # 单 IP 最大尝试次数
+  ip_lock_minutes: 30         # IP 锁定时间（分钟）
+
+  # 密码策略
+  password_min_length: 8      # 密码最小长度
+  password_require_num: true  # 密码必须包含数字
+  password_require_sym: true  # 密码必须包含特殊字符
+
+  # CSRF 保护
+  csrf_enabled: false         # API 服务通常不需要
+  csrf_token_expiry: 60
+  csrf_cookie_name: "csrf_token"
+
+  # 安全头
+  enable_security_headers: true
+
+  # 允许的来源（CORS）- 替换为实际域名
+  allowed_origins:
+    - "https://your-domain.com"
+    - "https://admin.your-domain.com"
+
+# ============================================
+# 生产环境部署检查清单
+# ============================================
+# [ ] 1. 更换所有默认密码（数据库、Redis、JWT Secret）
+# [ ] 2. 启用 TLS 并配置有效的 SSL 证书
+# [ ] 3. 设置 mode 为 "release"
+# [ ] 4. 配置正确的 CORS allowed_origins
+# [ ] 5. 创建专用数据库用户（非 root）
+# [ ] 6. 配置防火墙，仅开放必要端口
+# [ ] 7. 设置日志轮转和监控
+# [ ] 8. 定期备份数据库
+# [ ] 9. 将敏感配置移至环境变量

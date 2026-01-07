@@ -1,0 +1,87 @@
+# ============================================
+# License Server Git 忽略文件
+# ============================================
+
+# ===== Windows 特殊文件 =====
+nul
+NUL
+
+# ===== 敏感配置文件（绝对不能提交！）=====
+.env
+.env.local
+.env.production
+!.env.example
+config.yaml
+config.docker.yaml
+credentials.txt
+
+# ===== SSL 证书 =====
+certs/
+*.crt
+*.key
+*.pem
+*.p12
+
+# ===== 日志文件 =====
+logs/
+*.log
+
+# ===== 数据库文件 =====
+*.db
+*.sqlite
+*.sqlite3
+data.db
+
+# ===== 存储目录 =====
+storage/scripts/*
+storage/releases/*
+!storage/scripts/.gitkeep
+!storage/releases/.gitkeep
+
+# ===== Go 编译产物 =====
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+license-server
+server.exe
+test_build.exe
+
+# ===== Go 测试和覆盖率 =====
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# ===== 前端依赖和构建 =====
+admin/node_modules/
+admin/dist/
+admin/.env.local
+admin/.env.production.local
+
+# ===== IDE 和编辑器 =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ===== 临时文件 =====
+tmp/
+temp/
+*.tmp
+*.bak
+vendor/
+
+# ===== Docker 卷数据 =====
+mysql_data/
+redis_data/
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db
+
+# ===== 备份文件 =====
+*.backup
+backups/

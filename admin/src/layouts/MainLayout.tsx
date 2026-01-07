@@ -1,0 +1,200 @@
+import React, { useState } from 'react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Layout, Menu, Avatar, Dropdown, theme, Tag } from 'antd';
+import type { MenuProps } from 'antd';
+import {
+  DashboardOutlined,
+  AppstoreOutlined,
+  KeyOutlined,
+  DesktopOutlined,
+  UserOutlined,
+  LogoutOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  FileTextOutlined,
+  CrownOutlined,
+  StopOutlined,
+  DownloadOutlined,
+  UsergroupAddOutlined,
+  SafetyCertificateOutlined,
+  ToolOutlined,
+  TeamOutlined,
+  CloudSyncOutlined,
+} from '@ant-design/icons';
+import { useAuthStore } from '../store';
+
+const { Header, Sider, Content } = Layout;
+
+type MenuItem = Required<MenuProps>['items'][number];
+
+// 所有菜单项定义
+const allMenuItems: MenuItem[] = [
+  { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
+  {
+    key: 'auth',
+    icon: <SafetyCertificateOutlined />,
+    label: '授权中心',
+    children: [
+      { key: '/licenses', icon: <KeyOutlined />, label: '授权码' },
+      { key: '/subscriptions', icon: <CrownOutlined />, label: '订阅' },
+    ],
+  },
+  { key: '/customers', icon: <UsergroupAddOutlined />, label: '客户管理' },
+  {
+    key: 'device',
+    icon: <DesktopOutlined />,
+    label: '设备管理',
+    children: [
+      { key: '/devices', icon: <DesktopOutlined />, label: '设备列表' },
+      { key: '/blacklist', icon: <StopOutlined />, label: '黑名单' },
+    ],
+  },
+  { key: '/apps', icon: <AppstoreOutlined />, label: '应用管理' },
+  { key: '/backups', icon: <CloudSyncOutlined />, label: '数据备份' },
+  { key: '/team', icon: <TeamOutlined />, label: '团队管理' },
+  {
+    key: 'system',
+    icon: <ToolOutlined />,
+    label: '系统',
+    children: [
+      { key: '/audit', icon: <FileTextOutlined />, label: '操作日志' },
+      { key: '/export', icon: <DownloadOutlined />, label: '数据导出' },
+    ],
+  },
+];
+
+// 只读用户需要隐藏的菜单
+const viewerHiddenMenus = ['/apps', '/team', 'system', 'device'];
+
+// 根据角色过滤菜单
+const getMenuItemsByRole = (role?: string): MenuItem[] => {
+  if (role === 'viewer') {
+    return allMenuItems.filter(item => {
+      const key = (item as any)?.key;
+      return !viewerHiddenMenus.includes(key);
+    });
+  }
+  return allMenuItems;
+};
+
+const MainLayout: React.FC = () => {
+  const [collapsed, setCollapsed] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, tenant, logout } = useAuthStore();
+  const { token: { colorBgContainer, borderRadiusLG } } = theme.useToken();
+
+  // 根据用户角色获取菜单
+  const menuItems = getMenuItemsByRole(user?.role);
+
+  // 根据当前路径获取展开的菜单
+  const getOpenKeys = () => {
+    const path = location.pathname;
+    if (['/licenses', '/subscriptions'].includes(path)) return ['auth'];
+    if (['/devices', '/blacklist'].includes(path)) return ['device'];
+    if (['/audit', '/export', '/settings'].includes(path)) return ['system'];
+    return [];
+  };
+
+  const [openKeys, setOpenKeys] = useState<string[]>(getOpenKeys());
+
+  const handleMenuClick = ({ key }: { key: string }) => {
+    navigate(key);
+  };
+
+  const handleOpenChange = (keys: string[]) => {
+    setOpenKeys(keys);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const handleUserMenuClick = ({ key }: { key: string }) => {
+    if (key === 'profile') {
+      navigate('/profile');
+    } else if (key === 'logout') {
+      handleLogout();
+    }
+  };
+
+  const getRoleLabel = (role?: string) => {
+    const roleMap: Record<string, { color: string; text: string }> = {
+      owner: { color: 'gold', text: '所有者' },
+      admin: { color: 'red', text: '管理员' },
+      developer: { color: 'blue', text: '开发者' },
+      viewer: { color: 'default', text: '只读' },
+    };
+    const info = roleMap[role || ''] || { color: 'default', text: role };
+    return <Tag color={info.color} style={{ marginLeft: 8 }}>{info.text}</Tag>;
+  };
+
+  const userMenuItems = [
+    { key: 'profile', icon: <UserOutlined />, label: '个人中心' },
+    { type: 'divider' as const },
+    { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
+  ];
+
+  return (
+    <Layout style={{ minHeight: '100vh' }}>
+      <Sider trigger={null} collapsible collapsed={collapsed} theme="dark" width={200}>
+        <div style={{
+          height: 64,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#fff',
+          fontSize: collapsed ? 16 : 18,
+          fontWeight: 'bold',
+        }}>
+          {collapsed ? 'LS' : (tenant?.name || '授权管理平台')}
+        </div>
+        <Menu
+          theme="dark"
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          openKeys={collapsed ? [] : openKeys}
+          onOpenChange={handleOpenChange}
+          items={menuItems}
+          onClick={handleMenuClick}
+        />
+      </Sider>
+      <Layout>
+        <Header style={{
+          padding: '0 24px',
+          background: colorBgContainer,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <div
+            onClick={() => setCollapsed(!collapsed)}
+            style={{ cursor: 'pointer', fontSize: 18 }}
+          >
+            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          </div>
+          <Dropdown menu={{ items: userMenuItems, onClick: handleUserMenuClick }} placement="bottomRight">
+            <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Avatar icon={<UserOutlined />} />
+              <span>{user?.name || '用户'}</span>
+              {getRoleLabel(user?.role)}
+            </div>
+          </Dropdown>
+        </Header>
+        <Content style={{
+          margin: 24,
+          padding: 24,
+          background: colorBgContainer,
+          borderRadius: borderRadiusLG,
+          minHeight: 280,
+          overflow: 'auto',
+        }}>
+          <Outlet />
+        </Content>
+      </Layout>
+    </Layout>
+  );
+};
+
+export default MainLayout;
