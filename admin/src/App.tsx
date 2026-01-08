@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, App as AntdApp } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import MainLayout from './layouts/MainLayout';
 import Login from './pages/Login';
@@ -28,34 +28,36 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 const App: React.FC = () => {
   return (
     <ConfigProvider locale={zhCN}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/"
-            element={
-              <PrivateRoute>
-                <MainLayout />
-              </PrivateRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="apps" element={<Apps />} />
-            <Route path="apps/:id" element={<AppDetail />} />
-            <Route path="team" element={<TeamMembers />} />
-            <Route path="customers" element={<Customers />} />
-            <Route path="licenses" element={<Licenses />} />
-            <Route path="subscriptions" element={<Subscriptions />} />
-            <Route path="devices" element={<Devices />} />
-            <Route path="blacklist" element={<Blacklist />} />
-            <Route path="audit" element={<AuditLogs />} />
-            <Route path="export" element={<DataExport />} />
-            <Route path="backups" element={<DataBackups />} />
-            <Route path="profile" element={<Profile />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+      <AntdApp>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/"
+              element={
+                <PrivateRoute>
+                  <MainLayout />
+                </PrivateRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="apps" element={<Apps />} />
+              <Route path="apps/:id" element={<AppDetail />} />
+              <Route path="team" element={<TeamMembers />} />
+              <Route path="customers" element={<Customers />} />
+              <Route path="licenses" element={<Licenses />} />
+              <Route path="subscriptions" element={<Subscriptions />} />
+              <Route path="devices" element={<Devices />} />
+              <Route path="blacklist" element={<Blacklist />} />
+              <Route path="audit" element={<AuditLogs />} />
+              <Route path="export" element={<DataExport />} />
+              <Route path="backups" element={<DataBackups />} />
+              <Route path="profile" element={<Profile />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AntdApp>
     </ConfigProvider>
   );
 };
