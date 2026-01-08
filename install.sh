@@ -369,41 +369,41 @@ init_admin() {
 
     log_info "创建租户和管理员账号..."
 
-    # 中文字符的 UTF-8 十六进制编码（避免终端编码问题）
-    # "默认团队" = E9BB98E8AEA4E59BA2E9989F
-    # "管理员" = E7AEA1E79086E59198
+    # 创建临时 SQL 文件（避免 heredoc 和特殊字符问题）
+    cat > /tmp/init_admin.sql << 'EOSQL'
+-- 检查是否已存在租户
+SET @tenant_exists = (SELECT COUNT(*) FROM tenants WHERE slug = 'default');
 
-    # 重要：将密码哈希写入临时文件，避免 bash 解释 $ 符号
-    # bcrypt 哈希格式如 $2b$10$xxx，$ 在 bash 中会被解释为变量
-    echo "$PASSWORD_HASH" > /tmp/admin_hash.txt
+-- 如果不存在则创建租户
+SET @tenant_id = UUID();
+INSERT INTO tenants (id, name, slug, plan, status, created_at, updated_at)
+SELECT @tenant_id, '默认团队', 'default', 'enterprise', 'active', NOW(), NOW()
+WHERE @tenant_exists = 0;
 
-    # 通过 MySQL 容器创建租户和管理员
-    docker exec license-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" --default-character-set=utf8mb4 license_server <<EOF
-    -- 检查是否已存在租户
-    SET @tenant_exists = (SELECT COUNT(*) FROM tenants WHERE slug = 'default');
+-- 获取租户 ID
+SET @final_tenant_id = (SELECT id FROM tenants WHERE slug = 'default' LIMIT 1);
+EOSQL
 
-    -- 如果不存在则创建租户（使用十六进制存储中文）
-    SET @tenant_id = UUID();
-    INSERT INTO tenants (id, name, slug, plan, status, created_at, updated_at)
-    SELECT @tenant_id, X'E9BB98E8AEA4E59BA2E9989F', 'default', 'enterprise', 'active', NOW(), NOW()
-    WHERE @tenant_exists = 0;
+    # 追加管理员创建语句（需要变量替换）
+    cat >> /tmp/init_admin.sql << EOSQL
+-- 检查管理员是否已存在
+SET @admin_exists = (SELECT COUNT(*) FROM team_members WHERE email = '${ADMIN_EMAIL}');
 
-    -- 获取租户 ID（无论是新建还是已存在）
-    SET @final_tenant_id = (SELECT id FROM tenants WHERE slug = 'default' LIMIT 1);
+-- 如果不存在则创建管理员
+INSERT INTO team_members (id, tenant_id, email, password, name, role, status, created_at, updated_at, email_verified)
+SELECT UUID(), @final_tenant_id, '${ADMIN_EMAIL}', '${PASSWORD_HASH}', '管理员', 'owner', 'active', NOW(), NOW(), 1
+WHERE @admin_exists = 0;
 
-    -- 检查管理员是否已存在
-    SET @admin_exists = (SELECT COUNT(*) FROM team_members WHERE email = '${ADMIN_EMAIL}');
+SELECT COUNT(*) as created FROM team_members WHERE email = '${ADMIN_EMAIL}';
+EOSQL
 
-    -- 如果不存在则创建管理员（使用十六进制存储中文）
-    INSERT INTO team_members (id, tenant_id, email, password, name, role, status, created_at, updated_at, email_verified)
-    SELECT UUID(), @final_tenant_id, '${ADMIN_EMAIL}', '${PASSWORD_HASH}', X'E7AEA1E79086E59198', 'owner', 'active', NOW(), NOW(), 1
-    WHERE @admin_exists = 0;
-
-    SELECT COUNT(*) as created FROM team_members WHERE email = '${ADMIN_EMAIL}';
-EOF
+    # 执行 SQL 文件
+    docker cp /tmp/init_admin.sql license-mysql:/tmp/init_admin.sql
+    docker exec license-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" --default-character-set=utf8mb4 license_server -e "source /tmp/init_admin.sql"
 
     local result=$?
-    rm -f /tmp/admin_hash.txt
+    rm -f /tmp/init_admin.sql
+    docker exec license-mysql rm -f /tmp/init_admin.sql
 
     if [ $result -eq 0 ]; then
         # 验证是否真的创建成功
