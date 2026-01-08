@@ -339,9 +339,24 @@ start_services() {
 init_admin() {
     log_info "初始化管理员账号..."
 
-    # 等待数据库完全就绪
+    # 等待数据库完全就绪（主动检查而非简单 sleep）
     log_info "等待数据库就绪..."
-    sleep 10
+    local max_retries=30
+    local retry=0
+    while [ $retry -lt $max_retries ]; do
+        if docker exec license-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1" &>/dev/null; then
+            log_success "数据库已就绪"
+            break
+        fi
+        retry=$((retry + 1))
+        log_info "等待数据库... ($retry/$max_retries)"
+        sleep 2
+    done
+
+    if [ $retry -eq $max_retries ]; then
+        log_error "数据库连接超时"
+        return 1
+    fi
 
     # 使用 Python 生成 bcrypt 密码哈希
     log_info "生成密码哈希..."
@@ -358,15 +373,19 @@ init_admin() {
     # "默认团队" = E9BB98E8AEA4E59BA2E9989F
     # "管理员" = E7AEA1E79086E59198
 
-    # 通过 MySQL 容器创建租户和管理员（使用十六进制避免编码问题）
-    docker exec license-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" --default-character-set=utf8mb4 license_server -e "
+    # 重要：将密码哈希写入临时文件，避免 bash 解释 $ 符号
+    # bcrypt 哈希格式如 $2b$10$xxx，$ 在 bash 中会被解释为变量
+    echo "$PASSWORD_HASH" > /tmp/admin_hash.txt
+
+    # 通过 MySQL 容器创建租户和管理员
+    docker exec license-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" --default-character-set=utf8mb4 license_server <<EOF
     -- 检查是否已存在租户
     SET @tenant_exists = (SELECT COUNT(*) FROM tenants WHERE slug = 'default');
 
     -- 如果不存在则创建租户（使用十六进制存储中文）
     SET @tenant_id = UUID();
     INSERT INTO tenants (id, name, slug, plan, status, created_at, updated_at)
-    SELECT @tenant_id, X'E9BB98E8AEA4E59BA2E9989F', 'default', 'professional', 'active', NOW(), NOW()
+    SELECT @tenant_id, X'E9BB98E8AEA4E59BA2E9989F', 'default', 'enterprise', 'active', NOW(), NOW()
     WHERE @tenant_exists = 0;
 
     -- 获取租户 ID（无论是新建还是已存在）
@@ -379,12 +398,23 @@ init_admin() {
     INSERT INTO team_members (id, tenant_id, email, password, name, role, status, created_at, updated_at, email_verified)
     SELECT UUID(), @final_tenant_id, '${ADMIN_EMAIL}', '${PASSWORD_HASH}', X'E7AEA1E79086E59198', 'owner', 'active', NOW(), NOW(), 1
     WHERE @admin_exists = 0;
-    " 2>/dev/null
 
-    if [ $? -eq 0 ]; then
-        log_success "管理员账号初始化完成"
+    SELECT COUNT(*) as created FROM team_members WHERE email = '${ADMIN_EMAIL}';
+EOF
+
+    local result=$?
+    rm -f /tmp/admin_hash.txt
+
+    if [ $result -eq 0 ]; then
+        # 验证是否真的创建成功
+        local count=$(docker exec license-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -N -e "SELECT COUNT(*) FROM license_server.team_members WHERE email='${ADMIN_EMAIL}';" 2>/dev/null)
+        if [ "$count" = "1" ]; then
+            log_success "管理员账号初始化完成"
+        else
+            log_warning "管理员账号创建可能失败，请手动检查"
+        fi
     else
-        log_warning "管理员账号可能已存在或创建失败，请检查"
+        log_error "管理员账号创建失败，错误码: $result"
     fi
 }
 
