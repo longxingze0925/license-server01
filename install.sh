@@ -293,10 +293,12 @@ create_directories() {
     log_info "创建必要目录..."
 
     mkdir -p storage/scripts
-    mkdir -p storage/releases
+    mkdir -p storage/releases/hotupdate
     mkdir -p logs
     mkdir -p certs
 
+    # 设置权限，确保 Docker 容器内的 app 用户 (uid=1000) 可以写入
+    chown -R 1000:1000 storage logs
     chmod -R 755 storage logs certs
 
     log_success "目录创建完成"
