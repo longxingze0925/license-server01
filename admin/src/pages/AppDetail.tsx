@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Tabs, Button, Descriptions, Tag, Input, message, Spin, Card, Table, Space, Modal, Form, InputNumber, Upload, Select, Progress, Switch } from 'antd';
+import { Tabs, Button, Descriptions, Tag, Input, message, Spin, Card, Table, Space, Modal, Form, InputNumber, Upload, Select, Progress, Switch, App } from 'antd';
 import { ArrowLeftOutlined, CopyOutlined, KeyOutlined, PlusOutlined, UploadOutlined, EditOutlined, CodeOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
 import { appApi, hotUpdateApi, secureScriptApi, instructionApi } from '../api';
 import dayjs from 'dayjs';
@@ -9,6 +9,7 @@ const { Option } = Select;
 const { TextArea } = Input;
 
 const AppDetail: React.FC = () => {
+  const { modal } = App.useApp();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -69,7 +70,7 @@ const AppDetail: React.FC = () => {
   };
 
   const handleRegenerateKeys = async () => {
-    Modal.confirm({
+    modal.confirm({
       title: '重新生成密钥',
       content: '重新生成密钥后，旧密钥将失效，确定继续吗？',
       onOk: async () => {
@@ -140,7 +141,7 @@ const AppDetail: React.FC = () => {
   };
 
   const handleDeprecateVersion = async (versionId: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认废弃',
       content: '废弃后该版本将不再提供下载，确定吗？',
       onOk: async () => {
@@ -156,7 +157,7 @@ const AppDetail: React.FC = () => {
   };
 
   const handleRollbackVersion = async (versionId: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认回滚',
       content: '回滚后该版本将停止推送，确定吗？',
       onOk: async () => {
@@ -172,7 +173,7 @@ const AppDetail: React.FC = () => {
   };
 
   const handleDeleteVersion = async (versionId: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: '删除后无法恢复，确定吗？',
       onOk: async () => {
