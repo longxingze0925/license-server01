@@ -109,6 +109,7 @@ func main() {
 	// 创建存储目录
 	os.MkdirAll(cfg.Storage.ScriptsDir, 0755)
 	os.MkdirAll(cfg.Storage.ReleasesDir, 0755)
+	os.MkdirAll(cfg.Storage.ReleasesDir+"/hotupdate", 0755) // 热更新目录
 	os.MkdirAll("logs", 0755)
 
 	// 创建 Gin 引擎

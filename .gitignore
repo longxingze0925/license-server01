@@ -37,6 +37,9 @@ storage/scripts/*
 storage/releases/*
 !storage/scripts/.gitkeep
 !storage/releases/.gitkeep
+!storage/releases/hotupdate/
+storage/releases/hotupdate/*
+!storage/releases/hotupdate/.gitkeep
 
 # ===== Go 编译产物 =====
 *.exe
