@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Tag, Select, Upload, Progress, Descriptions, Tabs, Spin } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Tag, Select, Upload, Progress, Descriptions, Tabs, Spin, App } from 'antd';
 import { PlusOutlined, UploadOutlined, RollbackOutlined } from '@ant-design/icons';
 import { hotUpdateApi, appApi } from '../api';
 
 const HotUpdates: React.FC = () => {
+  const { modal } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [data, setData] = useState<any[]>([]);
@@ -103,7 +104,7 @@ const HotUpdates: React.FC = () => {
   };
 
   const handlePublish = async (id: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认发布',
       content: '确定要发布此热更新吗？',
       onOk: async () => {
@@ -119,7 +120,7 @@ const HotUpdates: React.FC = () => {
   };
 
   const handleRollback = async (id: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认回滚',
       content: '确定要回滚此热更新吗？这将使该版本失效。',
       onOk: async () => {
@@ -135,7 +136,7 @@ const HotUpdates: React.FC = () => {
   };
 
   const handleDelete = (record: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: `确定要删除版本 "${record.version}" 吗？`,
       onOk: async () => {
