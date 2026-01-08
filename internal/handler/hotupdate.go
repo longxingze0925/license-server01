@@ -121,7 +121,10 @@ func (h *HotUpdateHandler) Create(c *gin.Context) {
 		// 保存文件
 		cfg := config.Get()
 		hotUpdateDir := filepath.Join(cfg.Storage.ReleasesDir, "hotupdate")
-		os.MkdirAll(hotUpdateDir, 0755)
+		if err := os.MkdirAll(hotUpdateDir, 0755); err != nil {
+			response.ServerError(c, "创建目录失败: "+err.Error())
+			return
+		}
 
 		uploadType := "full"
 		if updateType == "patch" {
@@ -133,7 +136,7 @@ func (h *HotUpdateHandler) Create(c *gin.Context) {
 		filePath := filepath.Join(hotUpdateDir, filename)
 
 		if err := os.WriteFile(filePath, content, 0644); err != nil {
-			response.ServerError(c, "保存文件失败")
+			response.ServerError(c, "保存文件失败: "+err.Error())
 			return
 		}
 
@@ -211,14 +214,17 @@ func (h *HotUpdateHandler) Upload(c *gin.Context) {
 	// 保存文件
 	cfg := config.Get()
 	hotUpdateDir := filepath.Join(cfg.Storage.ReleasesDir, "hotupdate")
-	os.MkdirAll(hotUpdateDir, 0755)
+	if err := os.MkdirAll(hotUpdateDir, 0755); err != nil {
+		response.ServerError(c, "创建目录失败: "+err.Error())
+		return
+	}
 
 	filename := fmt.Sprintf("%s_%s_to_%s_%s%s",
 		app.AppKey, hotUpdate.FromVersion, hotUpdate.ToVersion, uploadType, filepath.Ext(header.Filename))
 	filePath := filepath.Join(hotUpdateDir, filename)
 
 	if err := os.WriteFile(filePath, content, 0644); err != nil {
-		response.ServerError(c, "保存文件失败")
+		response.ServerError(c, "保存文件失败: "+err.Error())
 		return
 	}
 
