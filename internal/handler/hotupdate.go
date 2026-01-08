@@ -608,7 +608,9 @@ func (h *HotUpdateHandler) CheckUpdate(c *gin.Context) {
 	}
 
 	// 优先返回增量包
-	if hotUpdate.PatchURL != "" && hotUpdate.FromVersion == currentVersion {
+	// 当 from_version 是 "*" 时，表示匹配任意版本
+	fromVersionMatch := hotUpdate.FromVersion == currentVersion || hotUpdate.FromVersion == "*"
+	if hotUpdate.PatchURL != "" && fromVersionMatch {
 		result["download_url"] = hotUpdate.PatchURL
 		result["file_size"] = hotUpdate.PatchSize
 		result["file_hash"] = hotUpdate.PatchHash
