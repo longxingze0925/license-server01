@@ -58,12 +58,15 @@ func (s *DataSyncService) GetChanges(userID, appID, dataType string, since time.
 		items = s.getCommentChanges(userID, appID, since, limit)
 	case model.DataTypeCommentScript:
 		items = s.getCommentScriptChanges(userID, appID, since, limit)
+	case model.DataTypeVoiceConfig:
+		items = s.getVoiceConfigChanges(userID, appID, since, limit)
 	case "":
 		// 获取所有类型
 		items = append(items, s.getConfigChanges(userID, appID, since, limit)...)
 		items = append(items, s.getWorkflowChanges(userID, appID, since, limit)...)
 		items = append(items, s.getMaterialChanges(userID, appID, since, limit)...)
 		items = append(items, s.getCommentScriptChanges(userID, appID, since, limit)...)
+		items = append(items, s.getVoiceConfigChanges(userID, appID, since, limit)...)
 	default:
 		return nil, errors.New("未知的数据类型")
 	}
@@ -232,6 +235,29 @@ func (s *DataSyncService) getCommentScriptChanges(userID, appID string, since ti
 	return items
 }
 
+func (s *DataSyncService) getVoiceConfigChanges(userID, appID string, since time.Time, limit int) []SyncItem {
+	var configs []model.UserVoiceConfig
+	model.DB.Where("user_id = ? AND app_id = ? AND updated_at > ?", userID, appID, since).
+		Order("updated_at ASC").Limit(limit).Find(&configs)
+
+	items := make([]SyncItem, 0, len(configs))
+	for _, vc := range configs {
+		action := "update"
+		if vc.IsDeleted {
+			action = "delete"
+		}
+		items = append(items, SyncItem{
+			DataType:  model.DataTypeVoiceConfig,
+			DataKey:   string(rune(vc.VoiceID)),
+			Action:    action,
+			Data:      vc,
+			Version:   vc.Version,
+			UpdatedAt: vc.UpdatedAt.Unix(),
+		})
+	}
+	return items
+}
+
 // ==================== 推送变更 (Push) ====================
 
 // PushItem 推送项
@@ -271,6 +297,8 @@ func (s *DataSyncService) pushSingleItem(userID, appID, deviceID string, item Pu
 		return s.pushComment(userID, appID, item)
 	case model.DataTypeCommentScript:
 		return s.pushCommentScript(userID, appID, item)
+	case model.DataTypeVoiceConfig:
+		return s.pushVoiceConfig(userID, appID, item)
 	default:
 		return SyncResult{
 			DataKey: item.DataKey,
@@ -588,6 +616,54 @@ func (s *DataSyncService) pushCommentScript(userID, appID string, item PushItem)
 	return SyncResult{DataKey: existing.ID, Status: "success", ServerVersion: existing.Version}
 }
 
+func (s *DataSyncService) pushVoiceConfig(userID, appID string, item PushItem) SyncResult {
+	var voiceConfig model.UserVoiceConfig
+	json.Unmarshal(item.Data, &voiceConfig)
+
+	var existing model.UserVoiceConfig
+	err := model.DB.Where("voice_id = ?", voiceConfig.VoiceID).First(&existing).Error
+
+	if err != nil {
+		if item.Action == "delete" {
+			return SyncResult{DataKey: item.DataKey, Status: "success", ServerVersion: 0}
+		}
+		voiceConfig.UserID = userID
+		voiceConfig.AppID = appID
+		voiceConfig.Version = 1
+		model.DB.Create(&voiceConfig)
+		return SyncResult{DataKey: item.DataKey, Status: "success", ServerVersion: 1}
+	}
+
+	if existing.Version != item.LocalVersion && item.LocalVersion != 0 {
+		return SyncResult{
+			DataKey:       item.DataKey,
+			Status:        "conflict",
+			ServerVersion: existing.Version,
+			ConflictData:  existing,
+		}
+	}
+
+	if item.Action == "delete" {
+		existing.IsDeleted = true
+	} else {
+		existing.Role = voiceConfig.Role
+		existing.Name = voiceConfig.Name
+		existing.GPTPath = voiceConfig.GPTPath
+		existing.SoVITSPath = voiceConfig.SoVITSPath
+		existing.RefAudioPath = voiceConfig.RefAudioPath
+		existing.RefText = voiceConfig.RefText
+		existing.Language = voiceConfig.Language
+		existing.SpeedFactor = voiceConfig.SpeedFactor
+		existing.TTSVersion = voiceConfig.TTSVersion
+		existing.Enabled = voiceConfig.Enabled
+		existing.IsDeleted = false
+	}
+	existing.Version++
+	model.DB.Save(&existing)
+
+	return SyncResult{DataKey: item.DataKey, Status: "success", ServerVersion: existing.Version}
+}
+
 // ==================== 冲突处理 ====================
 
 // ResolveConflict 解决冲突
@@ -699,6 +775,7 @@ type SyncStats struct {
 	PostCount          int64 `json:"post_count"`
 	CommentCount       int64 `json:"comment_count"`
 	CommentScriptCount int64 `json:"comment_script_count"`
+	VoiceConfigCount   int64 `json:"voice_config_count"`
 	PendingConflicts   int64 `json:"pending_conflicts"`
 	StorageUsed        int64 `json:"storage_used"`
 }
@@ -714,6 +791,7 @@ func (s *DataSyncService) GetSyncStats(userID, appID string) (*SyncStats, error)
 	model.DB.Model(&model.UserPost{}).Where("user_id = ? AND app_id = ? AND is_deleted = ?", userID, appID, false).Count(&stats.PostCount)
 	model.DB.Model(&model.UserComment{}).Where("user_id = ? AND app_id = ? AND is_deleted = ?", userID, appID, false).Count(&stats.CommentCount)
 	model.DB.Model(&model.UserCommentScript{}).Where("user_id = ? AND app_id = ? AND is_deleted = ?", userID, appID, false).Count(&stats.CommentScriptCount)
+	model.DB.Model(&model.UserVoiceConfig{}).Where("user_id = ? AND app_id = ? AND is_deleted = ?", userID, appID, false).Count(&stats.VoiceConfigCount)
 	model.DB.Model(&model.SyncConflict{}).Where("user_id = ? AND app_id = ? AND status = ?", userID, appID, "pending").Count(&stats.PendingConflicts)
 
 	// 计算存储使用量 (文件)

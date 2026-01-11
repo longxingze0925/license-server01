@@ -706,6 +706,22 @@ type CommentScriptData struct {
 	UpdatedAt int64  `json:"updated_at"`
 }
 
+// VoiceConfigData TTS声音配置数据
+type VoiceConfigData struct {
+	ID           int64   `json:"id"`
+	Role         string  `json:"role"`           // 角色标识
+	Name         string  `json:"name"`           // 配置名称
+	GPTPath      string  `json:"gpt_path"`       // GPT模型路径
+	SoVITSPath   string  `json:"sovits_path"`    // SoVITS模型路径
+	RefAudioPath string  `json:"ref_audio_path"` // 参考音频路径
+	RefText      string  `json:"ref_text"`       // 参考文本
+	Language     string  `json:"language"`       // 语言
+	SpeedFactor  float64 `json:"speed_factor"`   // 语速因子
+	TTSVersion   int     `json:"tts_version"`    // TTS版本: 1=v1, 2=v2, 3=v3, 4=v4, 5=v2Pro, 6=v2ProPlus
+	Enabled      bool    `json:"enabled"`        // 是否启用
+	UpdatedAt    int64   `json:"updated_at"`
+}
+
 // GetConfigs 获取配置数据
 func (d *DataSyncClient) GetConfigs(since int64) ([]ConfigData, int64, error) {
 	params := url.Values{}
@@ -1134,6 +1150,140 @@ func (d *DataSyncClient) SaveCommentScripts(scripts []CommentScriptData) error {
 		"application/json",
 		bytes.NewReader(jsonBody),
 	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return err
+	}
+	if result.Code != 0 {
+		return fmt.Errorf("API error: %s", result.Message)
+	}
+
+	return nil
+}
+
+// ==================== TTS声音配置同步 ====================
+
+// GetVoiceConfigs 获取TTS声音配置
+func (d *DataSyncClient) GetVoiceConfigs(since int64) ([]VoiceConfigData, int64, error) {
+	params := url.Values{}
+	params.Set("app_key", d.client.appKey)
+	params.Set("machine_id", d.client.machineID)
+	if since > 0 {
+		params.Set("since", strconv.FormatInt(since, 10))
+	}
+
+	resp, err := d.client.httpClient.Get(d.client.serverURL + "/api/client/sync/voice-configs?" + params.Encode())
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    struct {
+			VoiceConfigs []VoiceConfigData `json:"voice_configs"`
+			ServerTime   int64             `json:"server_time"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, 0, err
+	}
+	if result.Code != 0 {
+		return nil, 0, fmt.Errorf("API error: %s", result.Message)
+	}
+
+	return result.Data.VoiceConfigs, result.Data.ServerTime, nil
+}
+
+// SaveVoiceConfigs 批量保存TTS声音配置
+func (d *DataSyncClient) SaveVoiceConfigs(configs []VoiceConfigData) error {
+	reqBody := map[string]interface{}{
+		"app_key":       d.client.appKey,
+		"machine_id":    d.client.machineID,
+		"voice_configs": configs,
+	}
+
+	jsonBody, _ := json.Marshal(reqBody)
+	resp, err := d.client.httpClient.Post(
+		d.client.serverURL+"/api/client/sync/voice-configs/batch",
+		"application/json",
+		bytes.NewReader(jsonBody),
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return err
+	}
+	if result.Code != 0 {
+		return fmt.Errorf("API error: %s", result.Message)
+	}
+
+	return nil
+}
+
+// SaveVoiceConfig 保存单个TTS声音配置
+func (d *DataSyncClient) SaveVoiceConfig(config VoiceConfigData) error {
+	reqBody := map[string]interface{}{
+		"app_key":      d.client.appKey,
+		"machine_id":   d.client.machineID,
+		"voice_config": config,
+	}
+
+	jsonBody, _ := json.Marshal(reqBody)
+	resp, err := d.client.httpClient.Post(
+		d.client.serverURL+"/api/client/sync/voice-configs",
+		"application/json",
+		bytes.NewReader(jsonBody),
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return err
+	}
+	if result.Code != 0 {
+		return fmt.Errorf("API error: %s", result.Message)
+	}
+
+	return nil
+}
+
+// DeleteVoiceConfig 删除TTS声音配置
+func (d *DataSyncClient) DeleteVoiceConfig(voiceConfigID int64) error {
+	params := url.Values{}
+	params.Set("app_key", d.client.appKey)
+	params.Set("machine_id", d.client.machineID)
+
+	req, _ := http.NewRequest("DELETE",
+		d.client.serverURL+"/api/client/sync/voice-configs/"+strconv.FormatInt(voiceConfigID, 10)+"?"+params.Encode(), nil)
+
+	resp, err := d.client.httpClient.Do(req)
 	if err != nil {
 		return err
 	}

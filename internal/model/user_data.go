@@ -262,6 +262,32 @@ func (SyncLog) TableName() string {
 	return "sync_logs"
 }
 
+// ==================== 用户声音配置 ====================
+
+// UserVoiceConfig 用户声音配置（TTS配置）
+type UserVoiceConfig struct {
+	BaseModel
+	UserID       string  `gorm:"type:varchar(36);not null;index"`
+	AppID        string  `gorm:"type:varchar(36);not null;index"`
+	VoiceID      int64   `gorm:"not null;uniqueIndex"` // 客户端的voice_configs.id
+	Role         string  `gorm:"type:varchar(50)"`     // 角色标识
+	Name         string  `gorm:"type:varchar(100)"`    // 配置名称
+	GPTPath      string  `gorm:"type:varchar(500)"`    // GPT模型路径
+	SoVITSPath   string  `gorm:"type:varchar(500)"`    // SoVITS模型路径
+	RefAudioPath string  `gorm:"type:varchar(500)"`    // 参考音频路径
+	RefText      string  `gorm:"type:text"`            // 参考文本
+	Language     string  `gorm:"type:varchar(20);default:zh"`
+	SpeedFactor  float64 `gorm:"default:1.0"`
+	TTSVersion   int     `gorm:"default:2"`            // TTS版本: 1=v1, 2=v2, 3=v3, 4=v4, 5=v2Pro, 6=v2ProPlus
+	Enabled      bool    `gorm:"default:true"`
+	Version      int64   `gorm:"default:1"`
+	IsDeleted    bool    `gorm:"default:false;index"`
+}
+
+func (UserVoiceConfig) TableName() string {
+	return "user_voice_configs"
+}
+
 // ==================== 数据类型常量 ====================
 
 const (
@@ -272,7 +298,8 @@ const (
 	DataTypePost          = "post"
 	DataTypeComment       = "comment"
 	DataTypeCommentScript = "comment_script"
-	DataTypeTable         = "table" // 通用表数据
+	DataTypeVoiceConfig   = "voice_config" // TTS声音配置
+	DataTypeTable         = "table"        // 通用表数据
 )
 
 // 同步动作常量

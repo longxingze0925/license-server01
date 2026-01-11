@@ -185,7 +185,11 @@ func (m *HotUpdateManager) DownloadUpdate(info *HotUpdateInfo) (string, error) {
 	m.notifyCallback(HotUpdateStatusDownloading, 0, nil)
 
 	// 构建下载URL
-	downloadURL := m.client.GetServerURL() + info.DownloadURL
+	downloadURL := info.DownloadURL
+	// 如果不是完整URL，则拼接服务器地址
+	if !strings.HasPrefix(downloadURL, "http://") && !strings.HasPrefix(downloadURL, "https://") {
+		downloadURL = m.client.GetServerURL() + info.DownloadURL
+	}
 
 	// 创建HTTP请求
 	resp, err := m.client.GetHTTPClient().Get(downloadURL)

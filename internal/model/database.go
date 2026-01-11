@@ -81,6 +81,7 @@ func AutoMigrate() error {
 		&UserPost{},
 		&UserComment{},
 		&UserCommentScript{},
+		&UserVoiceConfig{},
 		&UserFile{},
 		&UserTableData{},
 		&SyncCheckpoint{},
