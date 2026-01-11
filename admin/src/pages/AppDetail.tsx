@@ -392,6 +392,9 @@ const AppDetail: React.FC = () => {
                         <Button type="link" size="small" danger onClick={() => handleDeprecateVersion(record.id)}>废弃</Button>
                       </>
                     )}
+                    {(record.status === 'rollback' || record.status === 'deprecated') && (
+                      <Button type="link" size="small" danger onClick={() => handleDeleteVersion(record.id)}>删除</Button>
+                    )}
                   </Space>
                 ),
               },
