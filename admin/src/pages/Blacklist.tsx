@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, message, Tag, Input, Card, Statistic, Row, Col, Spin } from 'antd';
+import { Table, Button, Space, Modal, message, Tag, Input, Card, Statistic, Row, Col, Spin, App } from 'antd';
 import { DeleteOutlined, SearchOutlined, StopOutlined } from '@ant-design/icons';
 import { blacklistApi } from '../api';
 
 const Blacklist: React.FC = () => {
+  const { modal } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [data, setData] = useState<any[]>([]);
@@ -33,7 +34,7 @@ const Blacklist: React.FC = () => {
   };
 
   const handleRemove = (record: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认移除',
       content: `确定要将机器码 "${record.machine_id}" 从黑名单中移除吗？移除后该设备将可以正常使用。`,
       onOk: async () => {

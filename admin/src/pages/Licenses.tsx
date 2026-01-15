@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, message, Tag, InputNumber, Descriptions, Checkbox } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, message, Tag, InputNumber, Descriptions, Checkbox, App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, StopOutlined, ReloadOutlined, CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 import { licenseApi, appApi, teamApi, exportApi } from '../api';
 import dayjs from 'dayjs';
@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 const { Option } = Select;
 
 const Licenses: React.FC = () => {
+  const { modal } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any[]>([]);
   const [apps, setApps] = useState<any[]>([]);
@@ -108,7 +109,7 @@ const Licenses: React.FC = () => {
   };
 
   const handleDelete = (record: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: `确定要删除此授权吗？`,
       onOk: async () => {
@@ -151,7 +152,7 @@ const Licenses: React.FC = () => {
   };
 
   const handleRevoke = (record: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: '吊销授权',
       content: '确定要吊销此授权吗？吊销后将无法使用。',
       onOk: async () => {
@@ -167,7 +168,7 @@ const Licenses: React.FC = () => {
   };
 
   const handleReset = (record: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: '重置设备',
       content: '确定要重置此授权的设备绑定吗？',
       onOk: async () => {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, message, Tag, Descriptions, Tooltip } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, message, Tag, Descriptions, Tooltip, App } from 'antd';
 import { StopOutlined, CheckCircleOutlined, DeleteOutlined, DesktopOutlined, MobileOutlined, AppleOutlined, WindowsOutlined, AndroidOutlined } from '@ant-design/icons';
 import { deviceApi } from '../api';
 import dayjs from 'dayjs';
@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 const { Option } = Select;
 
 const Devices: React.FC = () => {
+  const { modal } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any[]>([]);
   const [detailVisible, setDetailVisible] = useState(false);
@@ -40,7 +41,7 @@ const Devices: React.FC = () => {
   };
 
   const handleBlacklist = (record: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: '加入黑名单',
       content: '确定要将此设备加入黑名单吗？加入后该设备将无法使用任何授权。',
       onOk: async () => {
@@ -56,7 +57,7 @@ const Devices: React.FC = () => {
   };
 
   const handleRemoveFromBlacklist = (machineId: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: '移出黑名单',
       content: '确定要将此设备从黑名单移出吗？',
       onOk: async () => {
@@ -72,7 +73,7 @@ const Devices: React.FC = () => {
   };
 
   const handleUnbind = (record: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: '解绑设备',
       content: '确定要解绑此设备吗？解绑后该设备需要重新激活。',
       onOk: async () => {

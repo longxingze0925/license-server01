@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, message, Tag, Select, Descriptions, Tabs, Spin } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, message, Tag, Select, Descriptions, Tabs, Spin, App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, CodeOutlined } from '@ant-design/icons';
 import { secureScriptApi, appApi } from '../api';
 
 const SecureScripts: React.FC = () => {
+  const { modal } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [data, setData] = useState<any[]>([]);
@@ -122,7 +123,7 @@ const SecureScripts: React.FC = () => {
   };
 
   const handlePublish = async (id: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认发布',
       content: '确定要发布此脚本吗？发布后客户端将可以获取此脚本。',
       onOk: async () => {
@@ -138,7 +139,7 @@ const SecureScripts: React.FC = () => {
   };
 
   const handleDeprecate = async (id: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认废弃',
       content: '确定要废弃此脚本吗？废弃后客户端将无法获取此脚本。',
       onOk: async () => {
@@ -154,7 +155,7 @@ const SecureScripts: React.FC = () => {
   };
 
   const handleDelete = (record: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: `确定要删除脚本 "${record.name}" 吗？`,
       onOk: async () => {

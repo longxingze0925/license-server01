@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Tag } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Tag, App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SettingOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { appApi } from '../api';
 
 const Apps: React.FC = () => {
+  const { modal } = App.useApp();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any[]>([]);
@@ -44,7 +45,7 @@ const Apps: React.FC = () => {
   };
 
   const handleDelete = (record: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: `确定要删除应用 "${record.name}" 吗？`,
       onOk: async () => {

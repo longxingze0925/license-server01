@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Select, message, Tag, InputNumber, Descriptions, Input, Checkbox } from 'antd';
+import { Table, Button, Space, Modal, Form, Select, message, Tag, InputNumber, Descriptions, Input, Checkbox, App } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { subscriptionApi, appApi, customerApi } from '../api';
 import dayjs from 'dayjs';
@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 const { Option } = Select;
 
 const Subscriptions: React.FC = () => {
+  const { modal } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any[]>([]);
   const [apps, setApps] = useState<any[]>([]);
@@ -85,7 +86,7 @@ const Subscriptions: React.FC = () => {
   };
 
   const handleDelete = (record: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: '确定要删除此订阅吗？',
       onOk: async () => {
@@ -118,7 +119,7 @@ const Subscriptions: React.FC = () => {
   };
 
   const handleRenew = (record: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: '续费订阅',
       content: (
         <Form id="renewForm">
@@ -140,7 +141,7 @@ const Subscriptions: React.FC = () => {
   };
 
   const handleCancel = (record: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: '取消订阅',
       content: '确定要取消此订阅吗？',
       onOk: async () => {
