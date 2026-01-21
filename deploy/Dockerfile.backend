@@ -4,8 +4,15 @@
 # ===== 构建阶段 =====
 FROM golang:1.23-alpine AS builder
 
+# 使用国内镜像源（阿里云）
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
 # 启用自动工具链下载
 ENV GOTOOLCHAIN=auto
+
+# 配置 Go 国内代理
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GOSUMDB=sum.golang.google.cn
 
 # 安装构建依赖
 RUN apk add --no-cache git ca-certificates tzdata
@@ -29,6 +36,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 
 # ===== 运行阶段 =====
 FROM alpine:latest
+
+# 使用国内镜像源（阿里云）
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 # 安装运行时依赖
 RUN apk add --no-cache ca-certificates tzdata
