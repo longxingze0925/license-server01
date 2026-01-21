@@ -44,8 +44,7 @@ certs/
 
 # Docker 相关
 docker-compose*.yml
-Dockerfile*
-deploy/
+# 不排除 deploy/ 因为构建时需要使用
 
 # 其他
 Makefile
