@@ -65,9 +65,19 @@ func (s *Subscription) RemainingDays() int {
 	if s.ExpireAt == nil {
 		return -1 // 永久
 	}
-	remaining := time.Until(*s.ExpireAt)
-	if remaining < 0 {
+	// 计算从现在到过期时间的剩余时长
+	now := time.Now()
+	if s.ExpireAt.Before(now) {
 		return 0
 	}
-	return int(remaining.Hours() / 24)
+	// 使用日期差值计算，避免浮点数精度问题
+	// 将时间归零到当天0点，然后计算天数差
+	nowDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	expireDate := time.Date(s.ExpireAt.Year(), s.ExpireAt.Month(), s.ExpireAt.Day(), 0, 0, 0, 0, s.ExpireAt.Location())
+	days := int(expireDate.Sub(nowDate).Hours() / 24)
+	// 如果过期时间在今天之后，至少返回1天
+	if days == 0 && s.ExpireAt.After(now) {
+		days = 1
+	}
+	return days
 }
