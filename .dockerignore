@@ -1,0 +1,51 @@
+# Git 相关
+.git
+.github
+.gitignore
+
+# 文档
+*.md
+README.md
+CICD.md
+DEPLOY.md
+
+# 环境变量
+.env
+.env.local
+.env.*
+
+# 日志文件
+*.log
+logs/
+
+# Node 相关
+node_modules/
+admin/node_modules/
+admin/dist/
+admin/build/
+
+# 构建产物
+license-server
+main
+*.exe
+
+# 存储目录
+storage/
+certs/
+
+# IDE
+.vscode/
+.idea/
+.claude/
+
+# 脚本
+*.sh
+*.bat
+
+# Docker 相关
+docker-compose*.yml
+Dockerfile*
+deploy/
+
+# 其他
+Makefile
