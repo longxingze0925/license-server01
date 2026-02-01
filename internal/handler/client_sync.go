@@ -67,9 +67,9 @@ func (h *ClientSyncHandler) Push(c *gin.Context) {
 		return // 错误已在函数内处理
 	}
 
-	// 加密敏感数据（ai_config 中的 api_key）
+	// 加密敏感数据（ai_config 和 random_word_ai_config 中的 api_key）
 	dataJSON := req.DataJSON
-	if req.DataType == model.DataTypeAIConfig {
+	if req.DataType == model.DataTypeAIConfig || req.DataType == model.DataTypeRandomWordAIConfig {
 		dataJSON = encryptSensitiveData(dataJSON, app.AppSecret)
 	}
 
@@ -152,7 +152,7 @@ func (h *ClientSyncHandler) Pull(c *gin.Context) {
 
 			dataJSON := syncData.DataJSON
 			// 解密敏感数据
-			if dataType == model.DataTypeAIConfig {
+			if dataType == model.DataTypeAIConfig || dataType == model.DataTypeRandomWordAIConfig {
 				dataJSON = decryptSensitiveData(dataJSON, app.AppSecret)
 			}
 
@@ -172,7 +172,7 @@ func (h *ClientSyncHandler) Pull(c *gin.Context) {
 		for _, syncData := range syncDataList {
 			dataJSON := syncData.DataJSON
 			// 解密敏感数据
-			if syncData.DataType == model.DataTypeAIConfig {
+			if syncData.DataType == model.DataTypeAIConfig || syncData.DataType == model.DataTypeRandomWordAIConfig {
 				dataJSON = decryptSensitiveData(dataJSON, app.AppSecret)
 			}
 
@@ -250,7 +250,8 @@ func (h *ClientSyncHandler) cleanupOldVersions(clientUserID, appID, dataType str
 func isValidDataType(dataType string) bool {
 	return dataType == model.DataTypeScripts ||
 		dataType == model.DataTypeDanmakuGroups ||
-		dataType == model.DataTypeAIConfig
+		dataType == model.DataTypeAIConfig ||
+		dataType == model.DataTypeRandomWordAIConfig
 }
 
 // calculateChecksum 计算数据校验和
@@ -462,7 +463,7 @@ func (h *ClientSyncHandler) AdminGetBackupDetail(c *gin.Context) {
 
 	dataJSON := backup.DataJSON
 	// 解密敏感数据用于展示（前端负责隐藏/显示）
-	if backup.DataType == model.DataTypeAIConfig {
+	if backup.DataType == model.DataTypeAIConfig || backup.DataType == model.DataTypeRandomWordAIConfig {
 		dataJSON = decryptSensitiveData(dataJSON, app.AppSecret)
 	}
 

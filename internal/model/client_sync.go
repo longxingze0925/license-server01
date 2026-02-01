@@ -55,5 +55,8 @@ const DataTypeDanmakuGroups = "danmaku_groups"
 // DataTypeAIConfig AI配置
 const DataTypeAIConfig = "ai_config"
 
+// DataTypeRandomWordAIConfig 随机词AI配置
+const DataTypeRandomWordAIConfig = "random_word_ai_config"
+
 // MaxSyncVersions 每种数据最大保留版本数
 const MaxSyncVersions = 10
