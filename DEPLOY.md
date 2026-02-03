@@ -17,32 +17,41 @@
 
 ### 最快方式（HTTPS 一键安装，推荐）
 
+**方式一：远程一键（私有仓库，推荐）**
+
 ```bash
-# 1. 上传项目到服务器
-scp -r 用户管理系统 root@your-server:/opt/license-server
+export GIT_TOKEN=YOUR_TOKEN
+curl -H "Authorization: token $GIT_TOKEN" -fsSL \
+  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  --branch main --git-token "$GIT_TOKEN" \
+  --ssl letsencrypt --domain example.com --email admin@example.com -y
+```
 
-# 2. SSH 登录服务器
-ssh root@your-server
+**方式二：服务器本地执行（已克隆仓库）**
 
-# 3. 进入项目目录
+```bash
+git clone https://github.com/longxingze0925/license-server.git /opt/license-server
 cd /opt/license-server
-
-# 4. 运行 HTTPS 一键安装脚本
-chmod +x install-https.sh
-./install-https.sh
+chmod +x install.sh
+sudo ./install.sh
 ```
 
 ### HTTP 安装（不推荐用于生产）
 
 ```bash
-chmod +x install.sh
-./install.sh
+export GIT_TOKEN=YOUR_TOKEN
+curl -H "Authorization: token $GIT_TOKEN" -fsSL \
+  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  --branch main --git-token "$GIT_TOKEN" \
+  --ssl http -y
 ```
 
 安装脚本会自动：
 - 安装 Docker 和 Docker Compose
 - 生成安全的随机密码和密钥
-- **配置 SSL 证书（自签名或 Let's Encrypt）**
+- **配置 SSL 证书（自签名 / Let's Encrypt / 自定义证书）**
 - 配置所有服务
 - 初始化管理员账号
 - 保存所有凭据到 `credentials.txt`
@@ -56,13 +65,14 @@ chmod +x install.sh
 | CPU | 1 核 | 2 核+ |
 | 内存 | 1 GB | 2 GB+ |
 | 磁盘 | 10 GB | 20 GB+ |
-| 系统 | Ubuntu 20.04+ / CentOS 7+ | Ubuntu 22.04 |
+| 系统 | Ubuntu 20.04+ / Debian 11+ | Ubuntu 22.04 / Debian 12 |
 
 ### 端口要求
 
 | 端口 | 用途 |
 |------|------|
-| 80 | 前端管理后台 |
+| 80 | HTTP（可选） |
+| 443 | HTTPS（推荐） |
 | 8080 | 后端 API（可选暴露）|
 | 3306 | MySQL（仅内部访问）|
 | 6379 | Redis（仅内部访问）|
@@ -82,7 +92,8 @@ chmod +x install.sh
 | `JWT_SECRET` | JWT 签名密钥（≥32字符）| ✅ | 自动生成 |
 | `ADMIN_EMAIL` | 管理员邮箱 | ✅ | `admin@example.com` |
 | `ADMIN_PASSWORD` | 管理员初始密码 | ✅ | 自动生成 |
-| `FRONTEND_PORT` | 前端端口 | 可选 | `80` |
+| `HTTP_PORT` | HTTP 端口 | 可选 | `80` |
+| `HTTPS_PORT` | HTTPS 端口 | 可选 | `443` |
 | `BACKEND_PORT` | 后端端口 | 可选 | `8080` |
 
 ### 配置文件列表
@@ -104,34 +115,47 @@ chmod +x install.sh
 
 ## 一键安装
 
-### HTTPS 安装（推荐）
-
-```bash
-chmod +x install-https.sh
-sudo ./install-https.sh
-```
-
-脚本会引导你选择：
-1. **SSL 证书类型**：
-   - 自签名证书（用于 IP 地址部署）
-   - Let's Encrypt（用于域名部署）
-   - 仅 HTTP（不推荐）
-2. 服务器 IP 地址
-3. 端口配置
-4. 管理员邮箱
-
-### HTTP 安装
+### 交互式安装（推荐）
 
 ```bash
 chmod +x install.sh
 sudo ./install.sh
 ```
 
-脚本会引导你输入：
-1. 服务器 IP 地址
-2. 前端端口（默认 80）
-3. 后端端口（默认 8080）
-4. 管理员邮箱
+### 非交互安装（示例）
+
+**Let's Encrypt（域名）**
+
+```bash
+export GIT_TOKEN=YOUR_TOKEN
+curl -H "Authorization: token $GIT_TOKEN" -fsSL \
+  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  --branch main --git-token "$GIT_TOKEN" \
+  --ssl letsencrypt --domain example.com --email admin@example.com -y
+```
+
+**自定义证书（已购买证书）**
+
+```bash
+export GIT_TOKEN=YOUR_TOKEN
+curl -H "Authorization: token $GIT_TOKEN" -fsSL \
+  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  --branch main --git-token "$GIT_TOKEN" \
+  --ssl custom --cert /path/to/fullchain.crt --key /path/to/private.key -y
+```
+
+**仅 HTTP（不推荐）**
+
+```bash
+export GIT_TOKEN=YOUR_TOKEN
+curl -H "Authorization: token $GIT_TOKEN" -fsSL \
+  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  --branch main --git-token "$GIT_TOKEN" \
+  --ssl http -y
+```
 
 所有密码和密钥将自动生成并保存到 `credentials.txt`。
 
@@ -166,7 +190,7 @@ chmod +x ssl-manager.sh
 ./ssl-manager.sh self-signed 你的服务器IP
 
 # 或使用一键安装时选择自签名
-./install-https.sh
+./install.sh
 # 选择 1) 自签名证书
 ```
 
@@ -186,7 +210,7 @@ chmod +x ssl-manager.sh
 ./ssl-manager.sh letsencrypt your-domain.com admin@your-domain.com
 
 # 或使用一键安装时选择 Let's Encrypt
-./install-https.sh
+./install.sh
 # 选择 2) Let's Encrypt 证书
 ```
 
@@ -208,6 +232,12 @@ chmod 600 certs/ssl/server.key
 
 # 启动 HTTPS 服务
 docker compose -f docker-compose.https.yml up -d
+```
+
+或使用一键安装的 **custom** 模式（推荐）：
+
+```bash
+./install.sh --ssl custom --cert /path/to/fullchain.crt --key /path/to/private.key
 ```
 
 ### SSL 证书管理
@@ -327,14 +357,9 @@ docker compose down -v
 ### 更新部署
 
 ```bash
-# 拉取最新代码
-git pull
-
-# 重新构建
-docker compose build --no-cache
-
-# 重启服务
-docker compose up -d
+# 推荐：使用更新脚本（私有仓库需设置 Token 或 SSH）
+export GIT_TOKEN=YOUR_TOKEN
+./update.sh
 ```
 
 ### 数据库操作

@@ -22,6 +22,40 @@
 - JWT (认证)
 - RSA (签名加密)
 
+## 服务器一键安装（Docker，推荐）
+
+> 私有仓库需要 GitHub Token 或已配置 SSH Key。以下为 Token 方式示例。
+
+### HTTPS（Let's Encrypt，域名）
+
+```bash
+export GIT_TOKEN=YOUR_TOKEN
+curl -H "Authorization: token $GIT_TOKEN" -fsSL \
+  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  --branch main --git-token "$GIT_TOKEN" \
+  --ssl letsencrypt --domain example.com --email admin@example.com -y
+```
+
+### HTTPS（自定义证书）
+
+```bash
+export GIT_TOKEN=YOUR_TOKEN
+curl -H "Authorization: token $GIT_TOKEN" -fsSL \
+  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  --branch main --git-token "$GIT_TOKEN" \
+  --ssl custom --cert /path/to/fullchain.crt --key /path/to/private.key -y
+```
+
+### 更新
+
+```bash
+cd /opt/license-server
+export GIT_TOKEN=YOUR_TOKEN
+./update.sh
+```
+
 ## 快速开始
 
 ### 1. 配置数据库

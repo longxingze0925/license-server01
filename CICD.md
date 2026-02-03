@@ -94,8 +94,8 @@ git clone https://github.com/你的用户名/license-server.git /opt/license-ser
 cd /opt/license-server
 
 # 首次安装
-chmod +x install-https.sh
-./install-https.sh
+chmod +x install.sh
+./install.sh
 
 # 设置更新脚本权限
 chmod +x update.sh

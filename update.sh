@@ -11,6 +11,8 @@
 #   ./update.sh              # 更新到最新版本
 #   ./update.sh v1.2.0       # 更新到指定版本
 #   ./update.sh --force      # 强制更新（忽略本地修改）
+# 环境变量：
+#   GIT_TOKEN                # 私有仓库 Token（HTTPS）
 # ============================================
 
 set -e
@@ -30,6 +32,27 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 # 配置
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# 私有仓库 Token 支持（HTTPS）
+ORIGIN_URL=""
+TOKEN_ACTIVE=false
+
+restore_origin_url() {
+    if [ "$TOKEN_ACTIVE" = true ] && [ -n "$ORIGIN_URL" ]; then
+        git remote set-url origin "$ORIGIN_URL" >/dev/null 2>&1 || true
+    fi
+}
+
+prepare_git_auth() {
+    ORIGIN_URL=$(git remote get-url origin 2>/dev/null || echo "")
+    if [ -n "$GIT_TOKEN" ] && [[ "$ORIGIN_URL" == https://github.com/* ]]; then
+        local token_url="https://x-access-token:${GIT_TOKEN}@${ORIGIN_URL#https://}"
+        git remote set-url origin "$token_url" >/dev/null 2>&1 || true
+        TOKEN_ACTIVE=true
+    fi
+}
+
+trap restore_origin_url EXIT
 
 # 确定使用的 compose 文件
 if [ -f "docker-compose.https.yml" ] && [ -f "certs/ssl/server.crt" ]; then
@@ -78,6 +101,8 @@ backup_current() {
 # 拉取最新代码
 pull_latest() {
     log_info "检查更新..."
+
+    prepare_git_auth
 
     # 检查是否有本地修改
     if ! git diff --quiet 2>/dev/null; then
