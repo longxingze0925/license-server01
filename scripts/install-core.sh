@@ -36,6 +36,7 @@ HTTP_PORT="80"
 HTTPS_PORT="443"
 BACKEND_PORT="8080"
 FRONTEND_PORT="80"
+IMAGE_TAG="main"
 
 ADMIN_EMAIL="admin@example.com"
 ADMIN_PASSWORD=""
@@ -52,7 +53,7 @@ FORCE_REINSTALL=false
 SKIP_FIREWALL=false
 NO_INIT_ADMIN=false
 BUILD_NO_CACHE=true
-NO_BUILD=false
+NO_BUILD=true
 ENABLE_NGINX_PROXY="no"
 
 # 私有仓库 Token（仅用于 update）
@@ -71,6 +72,7 @@ SSL & 端口:
   --http-port <port>        HTTP 端口（默认: 80）
   --https-port <port>       HTTPS 端口（默认: 443）
   --backend-port <port>     后端端口（默认: 8080）
+  --image-tag <tag>         镜像标签（默认: main）
   --cert <path>             自定义证书文件路径（custom 模式）
   --key <path>              自定义私钥文件路径（custom 模式）
 
@@ -91,8 +93,9 @@ SSL & 端口:
   --nginx-proxy             启用 Nginx 反向代理（HTTPS 非 443 时可用）
   --skip-firewall           跳过防火墙配置
   --no-init-admin           跳过管理员初始化
-  --no-build                跳过镜像构建
-  --use-cache               构建时使用缓存（默认: --no-cache）
+  --build                   本地构建镜像（默认从 GHCR 拉取）
+  --no-build                兼容参数（默认已是拉取镜像）
+  --use-cache               构建时使用缓存（仅 --build）
   --force                   覆盖已有安装（重新生成配置）
 
 私有仓库:
@@ -117,6 +120,8 @@ parse_args() {
                 HTTPS_PORT="$2"; shift 2 ;;
             --backend-port)
                 BACKEND_PORT="$2"; shift 2 ;;
+            --image-tag)
+                IMAGE_TAG="$2"; shift 2 ;;
             --admin-email)
                 ADMIN_EMAIL="$2"; shift 2 ;;
             --admin-password)
@@ -141,6 +146,8 @@ parse_args() {
                 SKIP_FIREWALL=true; shift ;;
             --no-init-admin)
                 NO_INIT_ADMIN=true; shift ;;
+            --build)
+                NO_BUILD=false; shift ;;
             --no-build)
                 NO_BUILD=true; shift ;;
             --use-cache)
@@ -410,6 +417,7 @@ BACKEND_PORT=${BACKEND_PORT}
 HTTP_PORT=${HTTP_PORT}
 HTTPS_PORT=${HTTPS_PORT}
 FRONTEND_PORT=${HTTP_PORT}
+IMAGE_TAG=${IMAGE_TAG}
 
 # MySQL 配置
 MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
@@ -620,12 +628,6 @@ generate_ssl_cert() {
 }
 
 start_services() {
-    if [ "$NO_BUILD" = true ]; then
-        log_info "跳过镜像构建"
-    else
-        log_info "构建 Docker 镜像（首次可能需要几分钟）..."
-    fi
-
     if [ "$SSL_MODE" = "http" ]; then
         COMPOSE_FILE="docker-compose.yml"
     else
@@ -633,8 +635,12 @@ start_services() {
     fi
 
     if [ "$NO_BUILD" = true ]; then
+        log_info "拉取 Docker 镜像..."
+        docker compose -f "$COMPOSE_FILE" pull
+        log_info "启动服务..."
         docker compose -f "$COMPOSE_FILE" up -d
     else
+        log_info "构建 Docker 镜像（首次可能需要几分钟）..."
         if [ "$BUILD_NO_CACHE" = true ]; then
             docker compose -f "$COMPOSE_FILE" build --no-cache
         else

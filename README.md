@@ -25,6 +25,7 @@
 ## 服务器一键安装（Docker，推荐）
 
 > 仓库已开源，默认无需 Token。若使用私有仓库，请准备 GitHub Token 或配置 SSH Key。
+> 默认从 GHCR 拉取镜像部署；如需本地构建，请在安装命令末尾加 `--build`。
 
 ### HTTPS（Let's Encrypt，域名）
 
@@ -43,6 +44,8 @@ curl -fsSL https://raw.githubusercontent.com/longxingze0925/license-server01/mai
   --branch main \
   --ssl custom --cert /path/to/fullchain.crt --key /path/to/private.key -y
 ```
+
+> 如需指定镜像版本，可在安装时加 `--image-tag v1.2.0`，或安装后在 `.env` 中设置 `IMAGE_TAG`。
 
 ### 更新（拉取镜像）
 
