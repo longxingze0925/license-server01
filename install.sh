@@ -194,11 +194,17 @@ clone_repo() {
     fi
 
     log_info "克隆仓库: $REPO_URL (branch: $REPO_BRANCH)"
-    git clone -b "$REPO_BRANCH" "$clone_url" "$target_dir"
+    if ! git clone -b "$REPO_BRANCH" "$clone_url" "$target_dir"; then
+        log_error "克隆失败"
+        rm -rf "$target_dir" >/dev/null 2>&1 || true
+        return 1
+    fi
 
     if [ -n "$GIT_TOKEN" ] && [ "$USE_SSH" = false ]; then
         (cd "$target_dir" && git remote set-url origin "$clean_url")
     fi
+
+    return 0
 }
 
 ensure_repo_dir() {
@@ -211,31 +217,39 @@ ensure_repo_dir() {
         return 0
     fi
 
-    if [ "$NON_INTERACTIVE" = true ] && [ "$USE_SSH" = false ] && [ -z "$GIT_TOKEN" ]; then
-        log_error "私有仓库需要 --git-token 或 --ssh"
+    if clone_repo "$INSTALL_DIR"; then
+        cd "$INSTALL_DIR"
+        return 0
+    fi
+
+    if [ "$NON_INTERACTIVE" = true ]; then
+        log_error "克隆失败。若为私有仓库，请使用 --git-token 或 --ssh"
         exit 1
     fi
 
-    if [ "$NON_INTERACTIVE" = false ] && [ "$USE_SSH" = false ] && [ -z "$GIT_TOKEN" ]; then
-        echo ""
-        echo "仓库为私有仓库，请选择认证方式:"
-        echo "  1) HTTPS Token"
-        echo "  2) SSH（需已配置 SSH Key）"
-        read -p "请选择 [1]: " auth_choice
-        auth_choice=${auth_choice:-1}
-        if [ "$auth_choice" = "2" ]; then
-            USE_SSH=true
-        else
-            read -p "请输入 GitHub Token: " GIT_TOKEN
-            if [ -z "$GIT_TOKEN" ]; then
-                log_error "Token 不能为空"
-                exit 1
-            fi
+    echo ""
+    echo "克隆失败，可能是私有仓库或网络问题。请选择认证方式后重试:"
+    echo "  1) HTTPS Token"
+    echo "  2) SSH（需已配置 SSH Key）"
+    read -p "请选择 [1]: " auth_choice
+    auth_choice=${auth_choice:-1}
+    if [ "$auth_choice" = "2" ]; then
+        USE_SSH=true
+    else
+        read -p "请输入 GitHub Token: " GIT_TOKEN
+        if [ -z "$GIT_TOKEN" ]; then
+            log_error "Token 不能为空"
+            exit 1
         fi
     fi
 
-    clone_repo "$INSTALL_DIR"
-    cd "$INSTALL_DIR"
+    if clone_repo "$INSTALL_DIR"; then
+        cd "$INSTALL_DIR"
+        return 0
+    fi
+
+    log_error "二次克隆失败，请检查网络或仓库权限"
+    exit 1
 }
 
 main() {
