@@ -3,16 +3,13 @@
 # License Server 自动更新脚本
 # ============================================
 # 功能：
-#   - 从 GitHub 拉取最新代码
-#   - 重新构建 Docker 镜像
+#   - 拉取最新 Docker 镜像
 #   - 平滑重启服务（零停机）
 # ============================================
 # 使用方法：
 #   ./update.sh              # 更新到最新版本
-#   ./update.sh v1.2.0       # 更新到指定版本
-#   ./update.sh --force      # 强制更新（忽略本地修改）
-# 环境变量：
-#   GIT_TOKEN                # 私有仓库 Token（HTTPS）
+#   ./update.sh v1.2.0       # 更新到指定镜像标签
+#   ./update.sh --tag=v1.2.0 # 更新到指定镜像标签
 # ============================================
 
 set -e
@@ -33,27 +30,6 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# 私有仓库 Token 支持（HTTPS）
-ORIGIN_URL=""
-TOKEN_ACTIVE=false
-
-restore_origin_url() {
-    if [ "$TOKEN_ACTIVE" = true ] && [ -n "$ORIGIN_URL" ]; then
-        git remote set-url origin "$ORIGIN_URL" >/dev/null 2>&1 || true
-    fi
-}
-
-prepare_git_auth() {
-    ORIGIN_URL=$(git remote get-url origin 2>/dev/null || echo "")
-    if [ -n "$GIT_TOKEN" ] && [[ "$ORIGIN_URL" == https://github.com/* ]]; then
-        local token_url="https://x-access-token:${GIT_TOKEN}@${ORIGIN_URL#https://}"
-        git remote set-url origin "$token_url" >/dev/null 2>&1 || true
-        TOKEN_ACTIVE=true
-    fi
-}
-
-trap restore_origin_url EXIT
-
 # 确定使用的 compose 文件
 if [ -f "docker-compose.https.yml" ] && [ -f "certs/ssl/server.crt" ]; then
     COMPOSE_FILE="docker-compose.https.yml"
@@ -61,27 +37,43 @@ else
     COMPOSE_FILE="docker-compose.yml"
 fi
 
+compose_cmd() {
+    if [ -n "$IMAGE_TAG_OVERRIDE" ]; then
+        IMAGE_TAG="$IMAGE_TAG_OVERRIDE" docker compose -f "$COMPOSE_FILE" "$@"
+    else
+        docker compose -f "$COMPOSE_FILE" "$@"
+    fi
+}
+
 # 解析参数
-VERSION=""
-FORCE=false
+IMAGE_TAG_OVERRIDE=""
 for arg in "$@"; do
     case $arg in
-        --force|-f)
-            FORCE=true
+        --tag=*)
+            IMAGE_TAG_OVERRIDE="${arg#*=}"
             ;;
         v*)
-            VERSION="$arg"
+            IMAGE_TAG_OVERRIDE="$arg"
             ;;
     esac
 done
 
 # 显示当前版本
 show_current_version() {
-    if [ -f "VERSION" ]; then
-        echo "当前版本: $(cat VERSION)"
+    if [ -f ".env" ]; then
+        local env_tag
+        env_tag=$(grep -E '^IMAGE_TAG=' .env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"')
+        if [ -n "$env_tag" ]; then
+            echo "当前镜像标签: $env_tag"
+        fi
     fi
-    echo "当前分支: $(git branch --show-current 2>/dev/null || echo 'N/A')"
-    echo "最后提交: $(git log -1 --format='%h %s' 2>/dev/null || echo 'N/A')"
+    if [ -n "$IMAGE_TAG_OVERRIDE" ]; then
+        echo "本次目标标签: $IMAGE_TAG_OVERRIDE"
+    fi
+    if [ -d ".git" ] && command -v git >/dev/null 2>&1; then
+        echo "当前分支: $(git branch --show-current 2>/dev/null || echo 'N/A')"
+        echo "最后提交: $(git log -1 --format='%h %s' 2>/dev/null || echo 'N/A')"
+    fi
 }
 
 # 备份当前版本
@@ -98,47 +90,11 @@ backup_current() {
     log_success "备份完成: $BACKUP_DIR"
 }
 
-# 拉取最新代码
-pull_latest() {
-    log_info "检查更新..."
-
-    prepare_git_auth
-
-    # 检查是否有本地修改
-    if ! git diff --quiet 2>/dev/null; then
-        if [ "$FORCE" = true ]; then
-            log_warning "强制模式：丢弃本地修改"
-            git checkout -- .
-        else
-            log_error "检测到本地修改，请先提交或使用 --force 强制更新"
-            git status --short
-            exit 1
-        fi
-    fi
-
-    # 获取远程更新
-    git fetch origin
-
-    # 切换到指定版本或拉取最新
-    if [ -n "$VERSION" ]; then
-        log_info "切换到版本: $VERSION"
-        git checkout "$VERSION"
-    else
-        CURRENT_BRANCH=$(git branch --show-current)
-        log_info "更新分支: $CURRENT_BRANCH"
-        git pull origin "$CURRENT_BRANCH"
-    fi
-
-    log_success "代码更新完成"
-}
-
-# 重新构建镜像
-rebuild_images() {
-    log_info "重新构建 Docker 镜像..."
-
-    docker compose -f "$COMPOSE_FILE" build --no-cache
-
-    log_success "镜像构建完成"
+# 拉取最新镜像
+pull_images() {
+    log_info "拉取最新 Docker 镜像..."
+    compose_cmd pull
+    log_success "镜像拉取完成"
 }
 
 # 平滑重启服务
@@ -149,7 +105,7 @@ restart_services() {
     # 先启动新容器，等待健康检查通过后再停止旧容器
 
     # 重启后端
-    docker compose -f "$COMPOSE_FILE" up -d --no-deps --build backend
+    compose_cmd up -d --no-deps backend
 
     # 等待后端健康
     log_info "等待后端服务就绪..."
@@ -157,7 +113,7 @@ restart_services() {
 
     # 检查后端健康状态
     for i in {1..30}; do
-        if docker compose -f "$COMPOSE_FILE" exec -T backend wget --no-verbose --tries=1 --spider http://localhost:8080/api/health 2>/dev/null; then
+        if compose_cmd exec -T backend wget --no-verbose --tries=1 --spider http://localhost:8080/api/health 2>/dev/null; then
             log_success "后端服务就绪"
             break
         fi
@@ -165,7 +121,7 @@ restart_services() {
     done
 
     # 重启前端
-    docker compose -f "$COMPOSE_FILE" up -d --no-deps --build frontend
+    compose_cmd up -d --no-deps frontend
 
     log_info "等待前端服务就绪..."
     sleep 5
@@ -177,7 +133,7 @@ restart_services() {
 check_status() {
     log_info "检查服务状态..."
 
-    docker compose -f "$COMPOSE_FILE" ps
+    compose_cmd ps
 
     echo ""
     log_info "健康检查..."
@@ -199,13 +155,8 @@ check_status() {
 
 # 回滚到上一版本
 rollback() {
-    log_warning "回滚到上一版本..."
-
-    git checkout HEAD~1
-    rebuild_images
-    restart_services
-
-    log_success "回滚完成"
+    log_warning "镜像回滚需要指定版本标签，例如: ./update.sh v1.2.0"
+    exit 1
 }
 
 # 清理旧镜像
@@ -232,11 +183,8 @@ main() {
     # 备份
     backup_current
 
-    # 拉取代码
-    pull_latest
-
-    # 重新构建
-    rebuild_images
+    # 拉取镜像
+    pull_images
 
     # 重启服务
     restart_services

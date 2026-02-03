@@ -24,37 +24,37 @@
 
 ## 服务器一键安装（Docker，推荐）
 
-> 私有仓库需要 GitHub Token 或已配置 SSH Key。以下为 Token 方式示例。
+> 仓库已开源，默认无需 Token。若使用私有仓库，请准备 GitHub Token 或配置 SSH Key。
 
 ### HTTPS（Let's Encrypt，域名）
 
 ```bash
-export GIT_TOKEN=YOUR_TOKEN
-curl -H "Authorization: token $GIT_TOKEN" -fsSL \
-  https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh | \
+curl -fsSL https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh | \
   bash -s -- --repo https://github.com/longxingze0925/license-server01.git \
-  --branch main --git-token "$GIT_TOKEN" \
+  --branch main \
   --ssl letsencrypt --domain example.com --email admin@example.com -y
 ```
 
 ### HTTPS（自定义证书）
 
 ```bash
-export GIT_TOKEN=YOUR_TOKEN
-curl -H "Authorization: token $GIT_TOKEN" -fsSL \
-  https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh | \
+curl -fsSL https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh | \
   bash -s -- --repo https://github.com/longxingze0925/license-server01.git \
-  --branch main --git-token "$GIT_TOKEN" \
+  --branch main \
   --ssl custom --cert /path/to/fullchain.crt --key /path/to/private.key -y
 ```
 
-### 更新
+### 更新（拉取镜像）
 
 ```bash
 cd /opt/license-server
-export GIT_TOKEN=YOUR_TOKEN
-./update.sh
+./update.sh              # 拉取 main 镜像并更新
+./update.sh v1.2.0       # 拉取指定标签并更新
+# 或者在 .env 中设置 IMAGE_TAG=main / v1.2.0
 ```
+
+> 如果你的 GHCR 镜像是私有的，需要先执行 `docker login ghcr.io`。
+> `update.sh` 只拉取镜像并重启服务，不会更新本地仓库文件；如需更新脚本或配置，请手动 `git pull` 或重新安装。
 
 ## 快速开始
 

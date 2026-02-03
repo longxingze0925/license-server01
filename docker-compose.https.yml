@@ -55,6 +55,7 @@ services:
 
   # ===== 后端 API 服务 =====
   backend:
+    image: ghcr.io/longxingze0925/license-server01-backend:${IMAGE_TAG:-main}
     build:
       context: .
       dockerfile: deploy/Dockerfile.backend
@@ -83,6 +84,7 @@ services:
 
   # ===== 前端服务 (HTTPS) =====
   frontend:
+    image: ghcr.io/longxingze0925/license-server01-frontend:${IMAGE_TAG:-main}
     build:
       context: .
       dockerfile: deploy/Dockerfile.frontend.https
