@@ -37,6 +37,30 @@ type TableInfo struct {
 	LastUpdated string `json:"last_updated"`
 }
 
+// 数据类型常量
+const (
+	DataTypeScripts            = "scripts"              // 话术管理
+	DataTypeDanmakuGroups      = "danmaku_groups"       // 互动规则
+	DataTypeAIConfig           = "ai_config"            // AI配置
+	DataTypeRandomWordAIConfig = "random_word_ai_config" // 随机词AI配置
+)
+
+// BackupData 备份数据
+type BackupData struct {
+	ID         string `json:"id"`
+	DataType   string `json:"data_type"`
+	DataJSON   string `json:"data_json"`
+	Version    int    `json:"version"`
+	DeviceName string `json:"device_name"`
+	MachineID  string `json:"machine_id"`
+	IsCurrent  bool   `json:"is_current"`
+	DataSize   int64  `json:"data_size"`
+	ItemCount  int    `json:"item_count"`
+	Checksum   string `json:"checksum"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
 // DataSyncClient 数据同步客户端
 type DataSyncClient struct {
 	client       *Client
@@ -1302,4 +1326,117 @@ func (d *DataSyncClient) DeleteVoiceConfig(voiceConfigID int64) error {
 	}
 
 	return nil
+}
+
+// ==================== 数据备份和同步功能 ====================
+
+// PushBackup 推送备份数据到服务器
+// dataType: 数据类型（scripts/danmaku_groups/ai_config/random_word_ai_config）
+// dataJSON: JSON格式的数据
+// deviceName: 设备名称（可选）
+// itemCount: 条目数量（可选）
+func (d *DataSyncClient) PushBackup(dataType, dataJSON, deviceName string, itemCount int) error {
+	reqBody := map[string]interface{}{
+		"app_key":     d.client.appKey,
+		"machine_id":  d.client.machineID,
+		"data_type":   dataType,
+		"data_json":   dataJSON,
+		"device_name": deviceName,
+		"item_count":  itemCount,
+	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("序列化请求失败: %w", err)
+	}
+
+	resp, err := d.client.httpClient.Post(
+		d.client.serverURL+"/api/client/backup/push",
+		"application/json",
+		bytes.NewReader(jsonBody),
+	)
+	if err != nil {
+		return fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("解析响应失败: %w", err)
+	}
+	if result.Code != 0 {
+		return fmt.Errorf("API error: %s", result.Message)
+	}
+
+	return nil
+}
+
+// PullBackup 从服务器拉取指定类型的备份数据
+// dataType: 数据类型（scripts/danmaku_groups/ai_config/random_word_ai_config）
+// 返回备份数据列表（按版本降序排列，第一个为当前版本）
+func (d *DataSyncClient) PullBackup(dataType string) ([]BackupData, error) {
+	params := url.Values{}
+	params.Set("app_key", d.client.appKey)
+	params.Set("machine_id", d.client.machineID)
+	params.Set("data_type", dataType)
+
+	resp, err := d.client.httpClient.Get(d.client.serverURL + "/api/client/backup/pull?" + params.Encode())
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result struct {
+		Code    int          `json:"code"`
+		Message string       `json:"message"`
+		Data    []BackupData `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
+	if result.Code != 0 {
+		return nil, fmt.Errorf("API error: %s", result.Message)
+	}
+
+	return result.Data, nil
+}
+
+// PullAllBackups 从服务器拉取所有类型的备份数据
+// 返回按数据类型分组的备份数据映射
+func (d *DataSyncClient) PullAllBackups() (map[string][]BackupData, error) {
+	params := url.Values{}
+	params.Set("app_key", d.client.appKey)
+	params.Set("machine_id", d.client.machineID)
+
+	resp, err := d.client.httpClient.Get(d.client.serverURL + "/api/client/backup/pull?" + params.Encode())
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result struct {
+		Code    int          `json:"code"`
+		Message string       `json:"message"`
+		Data    []BackupData `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
+	if result.Code != 0 {
+		return nil, fmt.Errorf("API error: %s", result.Message)
+	}
+
+	// 按数据类型分组
+	backupMap := make(map[string][]BackupData)
+	for _, backup := range result.Data {
+		backupMap[backup.DataType] = append(backupMap[backup.DataType], backup)
+	}
+
+	return backupMap, nil
 }

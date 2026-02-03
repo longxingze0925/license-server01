@@ -22,8 +22,8 @@
 ```bash
 export GIT_TOKEN=YOUR_TOKEN
 curl -H "Authorization: token $GIT_TOKEN" -fsSL \
-  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
-  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server01.git \
   --branch main --git-token "$GIT_TOKEN" \
   --ssl letsencrypt --domain example.com --email admin@example.com -y
 ```
@@ -31,7 +31,7 @@ curl -H "Authorization: token $GIT_TOKEN" -fsSL \
 **方式二：服务器本地执行（已克隆仓库）**
 
 ```bash
-git clone https://github.com/longxingze0925/license-server.git /opt/license-server
+git clone https://github.com/longxingze0925/license-server01.git /opt/license-server
 cd /opt/license-server
 chmod +x install.sh
 sudo ./install.sh
@@ -42,8 +42,8 @@ sudo ./install.sh
 ```bash
 export GIT_TOKEN=YOUR_TOKEN
 curl -H "Authorization: token $GIT_TOKEN" -fsSL \
-  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
-  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server01.git \
   --branch main --git-token "$GIT_TOKEN" \
   --ssl http -y
 ```
@@ -129,8 +129,8 @@ sudo ./install.sh
 ```bash
 export GIT_TOKEN=YOUR_TOKEN
 curl -H "Authorization: token $GIT_TOKEN" -fsSL \
-  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
-  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server01.git \
   --branch main --git-token "$GIT_TOKEN" \
   --ssl letsencrypt --domain example.com --email admin@example.com -y
 ```
@@ -140,8 +140,8 @@ curl -H "Authorization: token $GIT_TOKEN" -fsSL \
 ```bash
 export GIT_TOKEN=YOUR_TOKEN
 curl -H "Authorization: token $GIT_TOKEN" -fsSL \
-  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
-  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server01.git \
   --branch main --git-token "$GIT_TOKEN" \
   --ssl custom --cert /path/to/fullchain.crt --key /path/to/private.key -y
 ```
@@ -151,8 +151,8 @@ curl -H "Authorization: token $GIT_TOKEN" -fsSL \
 ```bash
 export GIT_TOKEN=YOUR_TOKEN
 curl -H "Authorization: token $GIT_TOKEN" -fsSL \
-  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
-  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server01.git \
   --branch main --git-token "$GIT_TOKEN" \
   --ssl http -y
 ```

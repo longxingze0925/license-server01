@@ -31,8 +31,8 @@
 ```bash
 export GIT_TOKEN=YOUR_TOKEN
 curl -H "Authorization: token $GIT_TOKEN" -fsSL \
-  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
-  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server01.git \
   --branch main --git-token "$GIT_TOKEN" \
   --ssl letsencrypt --domain example.com --email admin@example.com -y
 ```
@@ -42,8 +42,8 @@ curl -H "Authorization: token $GIT_TOKEN" -fsSL \
 ```bash
 export GIT_TOKEN=YOUR_TOKEN
 curl -H "Authorization: token $GIT_TOKEN" -fsSL \
-  https://raw.githubusercontent.com/longxingze0925/license-server/main/install.sh | \
-  bash -s -- --repo https://github.com/longxingze0925/license-server.git \
+  https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh | \
+  bash -s -- --repo https://github.com/longxingze0925/license-server01.git \
   --branch main --git-token "$GIT_TOKEN" \
   --ssl custom --cert /path/to/fullchain.crt --key /path/to/private.key -y
 ```

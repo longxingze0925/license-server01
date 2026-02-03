@@ -117,6 +117,30 @@ class MaterialData:
     updated_at: int = 0
 
 
+# 数据类型常量
+DATA_TYPE_SCRIPTS = "scripts"  # 话术管理
+DATA_TYPE_DANMAKU_GROUPS = "danmaku_groups"  # 互动规则
+DATA_TYPE_AI_CONFIG = "ai_config"  # AI配置
+DATA_TYPE_RANDOM_WORD_AI_CONFIG = "random_word_ai_config"  # 随机词AI配置
+
+
+@dataclass
+class BackupData:
+    """备份数据"""
+    id: str
+    data_type: str
+    data_json: str
+    version: int = 0
+    device_name: str = ""
+    machine_id: str = ""
+    is_current: bool = False
+    data_size: int = 0
+    item_count: int = 0
+    checksum: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+
+
 @dataclass
 class PostData:
     """帖子数据"""
@@ -735,3 +759,103 @@ class AutoSyncManager:
             except Exception as e:
                 if self.on_error:
                     self.on_error(table_name, e)
+
+    # ==================== 数据备份和同步功能 ====================
+
+    def push_backup(self, data_type: str, data_json: str, device_name: str = "", item_count: int = 0) -> None:
+        """
+        推送备份数据到服务器
+
+        Args:
+            data_type: 数据类型（scripts/danmaku_groups/ai_config/random_word_ai_config）
+            data_json: JSON格式的数据
+            device_name: 设备名称（可选）
+            item_count: 条目数量（可选）
+
+        Raises:
+            Exception: 推送失败时抛出异常
+        """
+        req_body = {
+            "app_key": self.client.app_key,
+            "machine_id": self.client.machine_id,
+            "data_type": data_type,
+            "data_json": data_json,
+            "device_name": device_name,
+            "item_count": item_count
+        }
+
+        resp = self.client.session.post(
+            f"{self.client.server_url}/api/client/backup/push",
+            json=req_body
+        )
+        result = resp.json()
+
+        if result.get("code") != 0:
+            raise Exception(f"API error: {result.get('message')}")
+
+    def pull_backup(self, data_type: str) -> List[BackupData]:
+        """
+        从服务器拉取指定类型的备份数据
+
+        Args:
+            data_type: 数据类型（scripts/danmaku_groups/ai_config/random_word_ai_config）
+
+        Returns:
+            备份数据列表（按版本降序排列，第一个为当前版本）
+
+        Raises:
+            Exception: 拉取失败时抛出异常
+        """
+        params = {
+            "app_key": self.client.app_key,
+            "machine_id": self.client.machine_id,
+            "data_type": data_type
+        }
+
+        resp = self.client.session.get(
+            f"{self.client.server_url}/api/client/backup/pull",
+            params=params
+        )
+        result = resp.json()
+
+        if result.get("code") != 0:
+            raise Exception(f"API error: {result.get('message')}")
+
+        data_list = result.get("data", [])
+        return [BackupData(**item) for item in data_list]
+
+    def pull_all_backups(self) -> Dict[str, List[BackupData]]:
+        """
+        从服务器拉取所有类型的备份数据
+
+        Returns:
+            按数据类型分组的备份数据映射
+
+        Raises:
+            Exception: 拉取失败时抛出异常
+        """
+        params = {
+            "app_key": self.client.app_key,
+            "machine_id": self.client.machine_id
+        }
+
+        resp = self.client.session.get(
+            f"{self.client.server_url}/api/client/backup/pull",
+            params=params
+        )
+        result = resp.json()
+
+        if result.get("code") != 0:
+            raise Exception(f"API error: {result.get('message')}")
+
+        data_list = result.get("data", [])
+
+        # 按数据类型分组
+        backup_map: Dict[str, List[BackupData]] = {}
+        for item in data_list:
+            backup = BackupData(**item)
+            if backup.data_type not in backup_map:
+                backup_map[backup.data_type] = []
+            backup_map[backup.data_type].append(backup)
+
+        return backup_map

@@ -52,7 +52,9 @@
       "Bash(wails build:*)",
       "Bash(python -c:*)",
       "Bash(git fetch:*)",
-      "Bash(git rev-list:*)"
+      "Bash(git rev-list:*)",
+      "Bash(git checkout:*)",
+      "Bash(go version:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
