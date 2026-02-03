@@ -27,6 +27,14 @@
 > 仓库已开源，默认无需 Token。若使用私有仓库，请准备 GitHub Token 或配置 SSH Key。
 > 默认从 GHCR 拉取镜像部署；如需本地构建，请在安装命令末尾加 `--build`。
 
+### 超短一键命令（交互式）
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh)
+```
+
+> 无参数时进入交互模式，会引导你选择证书类型、域名、端口、管理员账号等。
+
 ### HTTPS（Let's Encrypt，域名）
 
 ```bash
@@ -46,6 +54,22 @@ curl -fsSL https://raw.githubusercontent.com/longxingze0925/license-server01/mai
 ```
 
 > 如需指定镜像版本，可在安装时加 `--image-tag v1.2.0`，或安装后在 `.env` 中设置 `IMAGE_TAG`。
+
+### 环境变量一键安装（非交互）
+
+```bash
+LS_SSL=letsencrypt LS_DOMAIN=example.com LS_EMAIL=admin@example.com \
+LS_ADMIN_EMAIL=admin@example.com LS_ADMIN_PASSWORD='Admin@123456' \
+bash <(curl -Ls https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh)
+```
+
+自定义证书示例：
+
+```bash
+LS_SSL=custom LS_CERT=/path/to/fullchain.crt LS_KEY=/path/to/private.key \
+LS_ADMIN_EMAIL=admin@example.com LS_ADMIN_PASSWORD='Admin@123456' \
+bash <(curl -Ls https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh)
+```
 
 ### 更新（拉取镜像）
 

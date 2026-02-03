@@ -13,11 +13,11 @@ REPO_URL_DEFAULT="https://github.com/longxingze0925/license-server01.git"
 REPO_BRANCH_DEFAULT="main"
 INSTALL_DIR_DEFAULT="/opt/license-server"
 
-REPO_URL="$REPO_URL_DEFAULT"
-REPO_BRANCH="$REPO_BRANCH_DEFAULT"
-INSTALL_DIR="$INSTALL_DIR_DEFAULT"
+REPO_URL="${LS_REPO:-$REPO_URL_DEFAULT}"
+REPO_BRANCH="${LS_BRANCH:-$REPO_BRANCH_DEFAULT}"
+INSTALL_DIR="${LS_DIR:-$INSTALL_DIR_DEFAULT}"
 
-GIT_TOKEN="${GIT_TOKEN:-}"
+GIT_TOKEN="${LS_GIT_TOKEN:-${GIT_TOKEN:-}}"
 USE_SSH=false
 NON_INTERACTIVE=false
 SHOW_HELP=false
@@ -26,6 +26,18 @@ PASS_ARGS=()
 
 log_info() { echo -e "[INFO] $1"; }
 log_error() { echo -e "[ERROR] $1"; }
+
+ensure_root() {
+    if [ "$EUID" -eq 0 ]; then
+        return 0
+    fi
+    if command -v sudo >/dev/null 2>&1; then
+        log_info "检测到非 root 用户，尝试使用 sudo 重新执行..."
+        exec sudo -E bash "$0" "$@"
+    fi
+    log_error "请使用 root 用户运行此脚本（或安装 sudo）"
+    exit 1
+}
 
 usage() {
     cat <<'EOF'
@@ -68,6 +80,82 @@ parse_args() {
                 PASS_ARGS+=("$1"); shift ;;
         esac
     done
+}
+
+is_true() {
+    case "$1" in
+        1|true|TRUE|yes|YES|y|Y|on|ON) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+has_arg() {
+    local key="$1"
+    for arg in "${PASS_ARGS[@]}"; do
+        if [ "$arg" = "$key" ] || [[ "$arg" == "$key="* ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+append_arg_if_set() {
+    local key="$1"
+    local value="$2"
+    if [ -n "$value" ] && ! has_arg "$key"; then
+        PASS_ARGS+=("$key" "$value")
+    fi
+}
+
+apply_env_overrides() {
+    local ssl_mode="${LS_SSL:-}"
+    local domain="${LS_DOMAIN:-}"
+    local email="${LS_EMAIL:-}"
+    local server_ip="${LS_SERVER_IP:-}"
+    local http_port="${LS_HTTP_PORT:-}"
+    local https_port="${LS_HTTPS_PORT:-}"
+    local backend_port="${LS_BACKEND_PORT:-}"
+    local admin_email="${LS_ADMIN_EMAIL:-}"
+    local admin_password="${LS_ADMIN_PASSWORD:-}"
+    local cert_path="${LS_CERT:-}"
+    local key_path="${LS_KEY:-}"
+    local image_tag="${LS_IMAGE_TAG:-}"
+
+    append_arg_if_set "--ssl" "$ssl_mode"
+    append_arg_if_set "--domain" "$domain"
+    append_arg_if_set "--email" "$email"
+    append_arg_if_set "--server-ip" "$server_ip"
+    append_arg_if_set "--http-port" "$http_port"
+    append_arg_if_set "--https-port" "$https_port"
+    append_arg_if_set "--backend-port" "$backend_port"
+    append_arg_if_set "--admin-email" "$admin_email"
+    append_arg_if_set "--admin-password" "$admin_password"
+    append_arg_if_set "--cert" "$cert_path"
+    append_arg_if_set "--key" "$key_path"
+    append_arg_if_set "--image-tag" "$image_tag"
+
+    if is_true "${LS_NGINX_PROXY:-}"; then
+        if ! has_arg "--nginx-proxy"; then
+            PASS_ARGS+=("--nginx-proxy")
+        fi
+    fi
+
+    if is_true "${LS_BUILD:-}"; then
+        if ! has_arg "--build" && ! has_arg "--no-build"; then
+            PASS_ARGS+=("--build")
+        fi
+    fi
+
+    if is_true "${LS_NON_INTERACTIVE:-}" || is_true "${LS_YES:-}"; then
+        if ! has_arg "--non-interactive" && ! has_arg "-y" && ! has_arg "--yes"; then
+            PASS_ARGS+=("--non-interactive")
+            NON_INTERACTIVE=true
+        fi
+    fi
+
+    if is_true "${LS_SSH:-}"; then
+        USE_SSH=true
+    fi
 }
 
 normalize_repo_url() {
@@ -151,7 +239,9 @@ ensure_repo_dir() {
 }
 
 main() {
+    ensure_root "$@"
     parse_args "$@"
+    apply_env_overrides
 
     if [ "$SHOW_HELP" = true ]; then
         if [ -f "scripts/install-core.sh" ]; then
