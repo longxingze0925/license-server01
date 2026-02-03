@@ -675,7 +675,9 @@ func TestHoneypotDetector(t *testing.T) {
 
 	// Record some calls
 	hd.RecordCall("testFunc")
+	time.Sleep(2 * time.Millisecond)
 	hd.RecordCall("testFunc")
+	time.Sleep(2 * time.Millisecond)
 	hd.RecordCall("testFunc")
 
 	// Should not be compromised yet
