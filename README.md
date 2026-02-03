@@ -71,6 +71,16 @@ LS_ADMIN_EMAIL=admin@example.com LS_ADMIN_PASSWORD='Admin@123456' \
 bash <(curl -Ls https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh)
 ```
 
+### 仅拉取镜像的一键安装（非交互）
+
+```bash
+LS_SSL=letsencrypt LS_DOMAIN=example.com LS_EMAIL=admin@example.com \
+LS_IMAGE_TAG=main \
+bash <(curl -Ls https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh)
+```
+
+> 若镜像是私有的，请先 `docker login ghcr.io`。
+
 ### 更新（拉取镜像）
 
 ```bash
