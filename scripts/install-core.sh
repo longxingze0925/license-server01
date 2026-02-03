@@ -274,6 +274,10 @@ interactive_config() {
         SERVER_IP=${SERVER_IP:-$DEFAULT_IP}
     fi
 
+    if [ -z "$DOMAIN" ]; then
+        read -p "域名（可留空）: " DOMAIN
+    fi
+
     if [ -z "$SSL_MODE" ]; then
         echo ""
         echo "=========================================="
