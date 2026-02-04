@@ -799,7 +799,7 @@ init_admin() {
 SET @tenant_exists = (SELECT COUNT(*) FROM tenants WHERE slug = 'default');
 SET @tenant_id = UUID();
 INSERT INTO tenants (id, name, slug, plan, status, created_at, updated_at)
-SELECT @tenant_id, '默认团队', 'default', 'enterprise', 'active', NOW(), NOW()
+SELECT @tenant_id, '管理后台', 'default', 'enterprise', 'active', NOW(), NOW()
 WHERE @tenant_exists = 0;
 SET @final_tenant_id = (SELECT id FROM tenants WHERE slug = 'default' LIMIT 1);
 EOSQL

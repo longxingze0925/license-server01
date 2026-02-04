@@ -68,7 +68,7 @@ func main() {
 
 		// 创建默认租户
 		tenant := model.Tenant{
-			Name:   "默认团队",
+			Name:   "管理后台",
 			Slug:   "default",
 			Status: model.TenantStatusActive,
 			Plan:   model.TenantPlanPro, // 使用 Pro 套餐，有更多配额
