@@ -26,6 +26,7 @@ PASS_ARGS=()
 
 log_info() { echo -e "[INFO] $1"; }
 log_error() { echo -e "[ERROR] $1"; }
+log_warning() { echo -e "[WARN] $1"; }
 
 ensure_root() {
     if [ "$EUID" -eq 0 ]; then
@@ -170,6 +171,32 @@ https_to_ssh() {
     echo "git@${host_path/\//:}"
 }
 
+maybe_pull_repo() {
+    if [ -n "${LS_NO_PULL:-}" ]; then
+        return 0
+    fi
+    if [ ! -d "$INSTALL_DIR/.git" ]; then
+        return 0
+    fi
+    if ! command -v git >/dev/null 2>&1; then
+        return 0
+    fi
+    if ! git -C "$INSTALL_DIR" diff --quiet 2>/dev/null || ! git -C "$INSTALL_DIR" diff --cached --quiet 2>/dev/null; then
+        log_warning "检测到本地修改，跳过拉取最新脚本"
+        return 0
+    fi
+    local branch
+    branch=$(git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+    if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
+        return 0
+    fi
+    log_info "检测到已有安装，尝试更新脚本..."
+    git -C "$INSTALL_DIR" fetch origin >/dev/null 2>&1 || return 0
+    if ! git -C "$INSTALL_DIR" pull --ff-only origin "$branch" >/dev/null 2>&1; then
+        log_warning "更新脚本失败，继续使用本地版本"
+    fi
+}
+
 clone_repo() {
     local target_dir="$1"
 
@@ -213,6 +240,7 @@ ensure_repo_dir() {
     fi
 
     if [ -d "$INSTALL_DIR/.git" ]; then
+        maybe_pull_repo
         cd "$INSTALL_DIR"
         return 0
     fi
