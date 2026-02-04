@@ -364,26 +364,9 @@ interactive_config() {
         SERVER_IP=${SERVER_IP:-$DEFAULT_IP}
     fi
 
-    while true; do
-        if [ -z "$DOMAIN" ]; then
-            read -p "域名（可留空）: " DOMAIN
-        fi
-        if [ -z "$DOMAIN" ]; then
-            read -p "未填写域名，将无法保证域名访问，是否继续？[y/N]: " continue_no_domain
-            if [ "$continue_no_domain" = "y" ] || [ "$continue_no_domain" = "Y" ]; then
-                break
-            fi
-            continue
-        fi
-        if check_domain_resolution; then
-            break
-        fi
-        read -p "解析不正确，是否重新输入域名？[Y/n]: " retry_domain
-        if [ "$retry_domain" = "n" ] || [ "$retry_domain" = "N" ]; then
-            exit 1
-        fi
-        DOMAIN=""
-    done
+    if [ -z "$DOMAIN" ]; then
+        read -p "域名（可留空）: " DOMAIN
+    fi
 
     if [ -z "$SSL_MODE" ]; then
         echo ""
@@ -448,10 +431,6 @@ interactive_config() {
             log_error "Let's Encrypt 需要域名和邮箱"
             exit 1
         fi
-        if ! check_domain_resolution; then
-            log_error "请先将域名解析到当前服务器 IP"
-            exit 1
-        fi
     fi
 
     if [ "$SSL_MODE" = "http" ]; then
@@ -508,11 +487,6 @@ validate_non_interactive() {
             log_error "无法自动获取服务器 IP，请使用 --server-ip 指定"
             exit 1
         fi
-    fi
-
-    if ! check_domain_resolution; then
-        log_error "请先将域名解析到当前服务器 IP"
-        exit 1
     fi
 
     if [ -z "$ADMIN_PASSWORD" ]; then
@@ -1187,9 +1161,6 @@ main() {
     start_services
     init_admin
     install_nginx_proxy
-    if ! check_domain_access; then
-        exit 1
-    fi
     configure_firewall
     save_credentials
     print_completion
