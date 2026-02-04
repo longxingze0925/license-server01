@@ -264,6 +264,96 @@ get_server_ip() {
     echo "$PUBLIC_IP"
 }
 
+resolve_domain_ips() {
+    if [ -z "$DOMAIN" ]; then
+        return 0
+    fi
+
+    if command -v getent >/dev/null 2>&1; then
+        getent ahosts "$DOMAIN" 2>/dev/null | awk '{print $1}' | grep -E '^[0-9]+\\.' | sort -u
+        return 0
+    fi
+
+    if command -v dig >/dev/null 2>&1; then
+        dig +short "$DOMAIN" 2>/dev/null | grep -E '^[0-9]+\\.' | sort -u
+        return 0
+    fi
+
+    if command -v nslookup >/dev/null 2>&1; then
+        nslookup "$DOMAIN" 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9]+\\.' | sort -u
+        return 0
+    fi
+}
+
+check_domain_resolution() {
+    if [ -z "$DOMAIN" ]; then
+        return 0
+    fi
+
+    if [ -z "$SERVER_IP" ]; then
+        SERVER_IP=$(get_server_ip)
+    fi
+
+    local ips
+    ips=$(resolve_domain_ips || true)
+    if [ -z "$ips" ]; then
+        log_error "无法解析域名: ${DOMAIN}"
+        return 1
+    fi
+
+    if ! echo "$ips" | grep -qx "$SERVER_IP"; then
+        log_error "域名解析未指向当前服务器 IP"
+        log_error "域名: ${DOMAIN}"
+        log_error "解析结果: $(echo "$ips" | tr '\n' ' ')"
+        log_error "服务器 IP: ${SERVER_IP}"
+        return 1
+    fi
+
+    return 0
+}
+
+check_domain_access() {
+    if [ -z "$DOMAIN" ]; then
+        return 0
+    fi
+
+    local url=""
+    if [ "$SSL_MODE" = "http" ]; then
+        if [ "$HTTP_PORT" = "80" ]; then
+            url="http://${DOMAIN}"
+        else
+            url="http://${DOMAIN}:${HTTP_PORT}"
+        fi
+    else
+        if [ "$ENABLE_NGINX_PROXY" = "yes" ] || [ "$HTTPS_PORT" = "443" ]; then
+            url="https://${DOMAIN}"
+        else
+            url="https://${DOMAIN}:${HTTPS_PORT}"
+        fi
+    fi
+
+    log_info "检查域名访问: ${url}"
+    local ok=false
+    for i in {1..10}; do
+        local code
+        code=$(curl -k -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$url" || true)
+        if [ -n "$code" ] && [ "$code" != "000" ] && [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then
+            ok=true
+            break
+        fi
+        sleep 2
+    done
+
+    if [ "$ok" != true ]; then
+        log_error "域名访问检测失败，请检查 DNS 解析、证书和端口放行"
+        log_error "检测地址: ${url}"
+        return 1
+    fi
+
+    log_success "域名访问检测通过"
+    return 0
+}
+
 interactive_config() {
     log_info "开始配置..."
     echo ""
@@ -274,9 +364,26 @@ interactive_config() {
         SERVER_IP=${SERVER_IP:-$DEFAULT_IP}
     fi
 
-    if [ -z "$DOMAIN" ]; then
-        read -p "域名（可留空）: " DOMAIN
-    fi
+    while true; do
+        if [ -z "$DOMAIN" ]; then
+            read -p "域名（可留空）: " DOMAIN
+        fi
+        if [ -z "$DOMAIN" ]; then
+            read -p "未填写域名，将无法保证域名访问，是否继续？[y/N]: " continue_no_domain
+            if [ "$continue_no_domain" = "y" ] || [ "$continue_no_domain" = "Y" ]; then
+                break
+            fi
+            continue
+        fi
+        if check_domain_resolution; then
+            break
+        fi
+        read -p "解析不正确，是否重新输入域名？[Y/n]: " retry_domain
+        if [ "$retry_domain" = "n" ] || [ "$retry_domain" = "N" ]; then
+            exit 1
+        fi
+        DOMAIN=""
+    done
 
     if [ -z "$SSL_MODE" ]; then
         echo ""
@@ -341,6 +448,10 @@ interactive_config() {
             log_error "Let's Encrypt 需要域名和邮箱"
             exit 1
         fi
+        if ! check_domain_resolution; then
+            log_error "请先将域名解析到当前服务器 IP"
+            exit 1
+        fi
     fi
 
     if [ "$SSL_MODE" = "http" ]; then
@@ -397,6 +508,11 @@ validate_non_interactive() {
             log_error "无法自动获取服务器 IP，请使用 --server-ip 指定"
             exit 1
         fi
+    fi
+
+    if ! check_domain_resolution; then
+        log_error "请先将域名解析到当前服务器 IP"
+        exit 1
     fi
 
     if [ -z "$ADMIN_PASSWORD" ]; then
@@ -1065,6 +1181,9 @@ main() {
     start_services
     init_admin
     install_nginx_proxy
+    if ! check_domain_access; then
+        exit 1
+    fi
     configure_firewall
     save_credentials
     print_completion
