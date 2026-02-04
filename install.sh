@@ -26,6 +26,7 @@ SHOW_HELP=false
 PASS_ARGS=()
 
 log_info() { echo -e "[INFO] $1"; }
+log_success() { echo -e "[SUCCESS] $1"; }
 log_error() { echo -e "[ERROR] $1"; }
 log_warning() { echo -e "[WARN] $1"; }
 
