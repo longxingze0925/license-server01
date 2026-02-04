@@ -34,6 +34,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/longxingze0925/license-server0
 ```
 
 > 无参数时进入交互模式，会引导你选择证书类型、域名、端口、管理员账号等。
+> 过程中会询问是否拉取源码：默认不拉取源码，仅下载必要文件；如需源码可选择 `y` 或使用 `--source` / `LS_SOURCE=1`。
 
 ### HTTPS（Let's Encrypt，域名）
 
@@ -59,6 +60,14 @@ curl -fsSL https://raw.githubusercontent.com/longxingze0925/license-server01/mai
 
 ```bash
 LS_SSL=letsencrypt LS_DOMAIN=example.com LS_EMAIL=admin@example.com \
+LS_ADMIN_EMAIL=admin@example.com LS_ADMIN_PASSWORD='Admin@123456' \
+bash <(curl -Ls https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh)
+```
+
+源码安装示例：
+
+```bash
+LS_SOURCE=1 LS_SSL=letsencrypt LS_DOMAIN=example.com LS_EMAIL=admin@example.com \
 LS_ADMIN_EMAIL=admin@example.com LS_ADMIN_PASSWORD='Admin@123456' \
 bash <(curl -Ls https://raw.githubusercontent.com/longxingze0925/license-server01/main/install.sh)
 ```
@@ -91,7 +100,7 @@ cd /opt/license-server
 ```
 
 > 如果你的 GHCR 镜像是私有的，需要先执行 `docker login ghcr.io`。
-> `update.sh` 只拉取镜像并重启服务，不会更新本地仓库文件；如需更新脚本或配置，请手动 `git pull` 或重新安装。
+> `update.sh` 只拉取镜像并重启服务，不会更新脚本或配置；如需更新脚本或配置，请重新运行安装脚本（源码模式可 `git pull`）。
 
 ## 快速开始
 

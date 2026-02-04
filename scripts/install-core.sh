@@ -692,6 +692,11 @@ create_directories() {
 }
 
 update_frontend_config() {
+    if [ "${LS_NO_SOURCE:-}" = "1" ] || [ ! -d "admin" ]; then
+        log_info "未检测到前端源码，跳过前端配置更新"
+        return 0
+    fi
+
     log_info "更新前端配置..."
 
     cat > admin/.env.production << EOF
@@ -707,7 +712,8 @@ generate_ssl_cert() {
         return 0
     fi
 
-    if [ ! -x "./ssl-manager.sh" ]; then
+    local ssl_manager="${ROOT_DIR}/ssl-manager.sh"
+    if [ ! -x "$ssl_manager" ]; then
         log_warning "未找到 ssl-manager.sh，跳过证书生成"
         if [ "$SSL_MODE" != "custom" ]; then
             return 0
@@ -716,11 +722,11 @@ generate_ssl_cert() {
 
     case $SSL_MODE in
         self-signed)
-            ./ssl-manager.sh self-signed "$SERVER_IP"
+            "$ssl_manager" self-signed "$SERVER_IP"
             ;;
         letsencrypt)
-            ./ssl-manager.sh letsencrypt "$DOMAIN" "$SSL_EMAIL"
-            ./ssl-manager.sh auto-renew
+            "$ssl_manager" letsencrypt "$DOMAIN" "$SSL_EMAIL"
+            "$ssl_manager" auto-renew
             ;;
         custom)
             local default_cert="$ROOT_DIR/certs/ssl/server.crt"

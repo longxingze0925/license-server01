@@ -18,6 +18,7 @@ REPO_BRANCH="${LS_BRANCH:-$REPO_BRANCH_DEFAULT}"
 INSTALL_DIR="${LS_DIR:-$INSTALL_DIR_DEFAULT}"
 
 GIT_TOKEN="${LS_GIT_TOKEN:-${GIT_TOKEN:-}}"
+USE_SOURCE=""
 USE_SSH=false
 NON_INTERACTIVE=false
 SHOW_HELP=false
@@ -51,6 +52,8 @@ Bootstrap 选项:
   --dir <path>        安装目录（默认: /opt/license-server）
   --git-token <token> 私有仓库 Token（HTTPS）
   --ssh               使用 SSH 克隆
+  --source            拉取源码（可本地构建）
+  --no-source         不拉取源码（默认，仅下载必要文件）
   -y, --non-interactive  非交互模式
   -h, --help          显示帮助
 
@@ -73,6 +76,10 @@ parse_args() {
                 GIT_TOKEN="$2"; shift 2 ;;
             --ssh)
                 USE_SSH=true; shift ;;
+            --source)
+                USE_SOURCE=true; shift ;;
+            --no-source)
+                USE_SOURCE=false; shift ;;
             -y|--non-interactive)
                 NON_INTERACTIVE=true; PASS_ARGS+=("$1"); shift ;;
             -h|--help)
@@ -157,6 +164,18 @@ apply_env_overrides() {
     if is_true "${LS_SSH:-}"; then
         USE_SSH=true
     fi
+
+    if [ -n "${LS_SOURCE:-}" ]; then
+        if is_true "${LS_SOURCE}"; then
+            USE_SOURCE=true
+        else
+            USE_SOURCE=false
+        fi
+    fi
+
+    if is_true "${LS_NO_SOURCE:-}"; then
+        USE_SOURCE=false
+    fi
 }
 
 normalize_repo_url() {
@@ -197,6 +216,75 @@ maybe_pull_repo() {
     fi
 }
 
+resolve_source_choice() {
+    if [ -n "$USE_SOURCE" ]; then
+        return 0
+    fi
+    if [ "$NON_INTERACTIVE" = true ]; then
+        USE_SOURCE=false
+        return 0
+    fi
+    echo ""
+    read -p "是否拉取源码（可本地构建）？[y/N]: " source_choice
+    if is_true "$source_choice"; then
+        USE_SOURCE=true
+    else
+        USE_SOURCE=false
+    fi
+}
+
+get_github_repo_path() {
+    local url="$REPO_URL"
+    if [[ "$url" == git@github.com:* ]]; then
+        url=${url#git@github.com:}
+    elif [[ "$url" == https://github.com/* ]]; then
+        url=${url#https://github.com/}
+    else
+        return 1
+    fi
+    url=${url%.git}
+    echo "$url"
+}
+
+download_file() {
+    local url="$1"
+    local dest="$2"
+    local dir
+    dir=$(dirname "$dest")
+    mkdir -p "$dir"
+
+    local header=()
+    if [ -n "$GIT_TOKEN" ]; then
+        header=(-H "Authorization: token ${GIT_TOKEN}")
+    fi
+
+    if ! curl -fsSL "${header[@]}" "$url" -o "$dest"; then
+        log_error "下载失败: $url"
+        exit 1
+    fi
+}
+
+download_required_files() {
+    local repo_path
+    repo_path=$(get_github_repo_path) || {
+        log_error "仅支持 GitHub 仓库的无源码安装模式"
+        exit 1
+    }
+
+    local raw_base="https://raw.githubusercontent.com/${repo_path}/${REPO_BRANCH}"
+
+    log_info "下载必要文件..."
+    download_file "${raw_base}/docker-compose.yml" "${INSTALL_DIR}/docker-compose.yml"
+    download_file "${raw_base}/docker-compose.https.yml" "${INSTALL_DIR}/docker-compose.https.yml"
+    download_file "${raw_base}/update.sh" "${INSTALL_DIR}/update.sh"
+    download_file "${raw_base}/ssl-manager.sh" "${INSTALL_DIR}/ssl-manager.sh"
+    download_file "${raw_base}/deploy/mysql/init.sql" "${INSTALL_DIR}/deploy/mysql/init.sql"
+    download_file "${raw_base}/scripts/install-core.sh" "${INSTALL_DIR}/scripts/install-core.sh"
+
+    chmod +x "${INSTALL_DIR}/update.sh" "${INSTALL_DIR}/ssl-manager.sh" "${INSTALL_DIR}/scripts/install-core.sh"
+    log_success "必要文件下载完成"
+}
+
 clone_repo() {
     local target_dir="$1"
 
@@ -234,50 +322,60 @@ clone_repo() {
     return 0
 }
 
+ensure_repo_dir_nosource() {
+    mkdir -p "$INSTALL_DIR"
+    download_required_files
+    cd "$INSTALL_DIR"
+}
+
 ensure_repo_dir() {
-    if [ -f "scripts/install-core.sh" ] && [ -f "docker-compose.yml" ]; then
-        return 0
-    fi
+    if [ "$USE_SOURCE" = true ]; then
+        if [ -f "scripts/install-core.sh" ] && [ -f "docker-compose.yml" ]; then
+            return 0
+        fi
 
-    if [ -d "$INSTALL_DIR/.git" ]; then
-        maybe_pull_repo
-        cd "$INSTALL_DIR"
-        return 0
-    fi
+        if [ -d "$INSTALL_DIR/.git" ]; then
+            maybe_pull_repo
+            cd "$INSTALL_DIR"
+            return 0
+        fi
 
-    if clone_repo "$INSTALL_DIR"; then
-        cd "$INSTALL_DIR"
-        return 0
-    fi
+        if clone_repo "$INSTALL_DIR"; then
+            cd "$INSTALL_DIR"
+            return 0
+        fi
 
-    if [ "$NON_INTERACTIVE" = true ]; then
-        log_error "克隆失败。若为私有仓库，请使用 --git-token 或 --ssh"
+        if [ "$NON_INTERACTIVE" = true ]; then
+            log_error "克隆失败。若为私有仓库，请使用 --git-token 或 --ssh"
+            exit 1
+        fi
+
+        echo ""
+        echo "克隆失败，可能是私有仓库或网络问题。请选择认证方式后重试:"
+        echo "  1) HTTPS Token"
+        echo "  2) SSH（需已配置 SSH Key）"
+        read -p "请选择 [1]: " auth_choice
+        auth_choice=${auth_choice:-1}
+        if [ "$auth_choice" = "2" ]; then
+            USE_SSH=true
+        else
+            read -p "请输入 GitHub Token: " GIT_TOKEN
+            if [ -z "$GIT_TOKEN" ]; then
+                log_error "Token 不能为空"
+                exit 1
+            fi
+        fi
+
+        if clone_repo "$INSTALL_DIR"; then
+            cd "$INSTALL_DIR"
+            return 0
+        fi
+
+        log_error "二次克隆失败，请检查网络或仓库权限"
         exit 1
     fi
 
-    echo ""
-    echo "克隆失败，可能是私有仓库或网络问题。请选择认证方式后重试:"
-    echo "  1) HTTPS Token"
-    echo "  2) SSH（需已配置 SSH Key）"
-    read -p "请选择 [1]: " auth_choice
-    auth_choice=${auth_choice:-1}
-    if [ "$auth_choice" = "2" ]; then
-        USE_SSH=true
-    else
-        read -p "请输入 GitHub Token: " GIT_TOKEN
-        if [ -z "$GIT_TOKEN" ]; then
-            log_error "Token 不能为空"
-            exit 1
-        fi
-    fi
-
-    if clone_repo "$INSTALL_DIR"; then
-        cd "$INSTALL_DIR"
-        return 0
-    fi
-
-    log_error "二次克隆失败，请检查网络或仓库权限"
-    exit 1
+    ensure_repo_dir_nosource
 }
 
 main() {
@@ -293,10 +391,21 @@ main() {
         exit 0
     fi
 
+    resolve_source_choice
+
+    if [ "$USE_SOURCE" = false ] && has_arg "--build"; then
+        log_error "无源码模式不支持 --build，请使用 --source 或 LS_SOURCE=1"
+        exit 1
+    fi
+
     ensure_repo_dir
 
     if [ -n "$GIT_TOKEN" ]; then
         export GIT_TOKEN
+    fi
+
+    if [ "$USE_SOURCE" = false ]; then
+        export LS_NO_SOURCE=1
     fi
 
     exec bash scripts/install-core.sh "${PASS_ARGS[@]}"
