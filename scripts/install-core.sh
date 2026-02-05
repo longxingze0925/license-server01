@@ -50,11 +50,14 @@ UPDATE_ONLY=false
 UPDATE_VERSION=""
 UPDATE_FORCE=false
 FORCE_REINSTALL=false
+REINSTALL_DB_MODE=""
 SKIP_FIREWALL=false
 NO_INIT_ADMIN=false
 BUILD_NO_CACHE=true
 NO_BUILD=true
 ENABLE_NGINX_PROXY="no"
+RESET_VOLUMES=false
+REUSE_SECRETS=false
 
 # 私有仓库 Token（仅用于 update）
 GIT_TOKEN="${GIT_TOKEN:-}"
@@ -97,6 +100,7 @@ SSL & 端口:
   --no-build                兼容参数（默认已是拉取镜像）
   --use-cache               构建时使用缓存（仅 --build）
   --force                   覆盖已有安装（重新生成配置）
+  --reinstall-db <mode>     重新安装时数据库处理: keep/reset/reset-new
 
 私有仓库:
   --git-token <token>       私有仓库 Token（仅用于 update）
@@ -154,6 +158,8 @@ parse_args() {
                 BUILD_NO_CACHE=false; shift ;;
             --force)
                 FORCE_REINSTALL=true; shift ;;
+            --reinstall-db)
+                REINSTALL_DB_MODE="$2"; shift 2 ;;
             --git-token)
                 GIT_TOKEN="$2"; shift 2 ;;
             --repo|--branch|--dir)
@@ -262,6 +268,79 @@ get_server_ip() {
     fi
 
     echo "$PUBLIC_IP"
+}
+
+get_env_value() {
+    local key="$1"
+    if [ ! -f ".env" ]; then
+        return 1
+    fi
+    grep -E "^${key}=" .env | tail -1 | cut -d= -f2- | tr -d '\r' | sed 's/^"//;s/"$//'
+}
+
+load_existing_secrets() {
+    if [ ! -f ".env" ]; then
+        return 1
+    fi
+
+    local v
+    v=$(get_env_value "MYSQL_ROOT_PASSWORD" || true); [ -n "$v" ] && MYSQL_ROOT_PASSWORD="$v"
+    v=$(get_env_value "MYSQL_PASSWORD" || true); [ -n "$v" ] && MYSQL_PASSWORD="$v"
+    v=$(get_env_value "REDIS_PASSWORD" || true); [ -n "$v" ] && REDIS_PASSWORD="$v"
+    v=$(get_env_value "JWT_SECRET" || true); [ -n "$v" ] && JWT_SECRET="$v"
+    return 0
+}
+
+reset_data_volumes() {
+    log_warning "将重置数据库与缓存数据（会清空 MySQL/Redis）"
+    docker rm -f license-backend license-frontend license-mysql license-redis >/dev/null 2>&1 || true
+    docker volume rm -f license-mysql-data license-redis-data >/dev/null 2>&1 || true
+}
+
+apply_reinstall_db_mode() {
+    case "$REINSTALL_DB_MODE" in
+        ""|keep)
+            REINSTALL_DB_MODE="keep"
+            REUSE_SECRETS=true
+            ;;
+        reset)
+            REINSTALL_DB_MODE="reset"
+            REUSE_SECRETS=true
+            RESET_VOLUMES=true
+            ;;
+        reset-new|reset_new)
+            REINSTALL_DB_MODE="reset-new"
+            RESET_VOLUMES=true
+            ;;
+        *)
+            log_error "无效的 --reinstall-db 参数: $REINSTALL_DB_MODE"
+            exit 1
+            ;;
+    esac
+}
+
+prompt_reinstall_db_mode() {
+    if [ -n "$REINSTALL_DB_MODE" ]; then
+        apply_reinstall_db_mode
+        return 0
+    fi
+
+    echo ""
+    echo "重新安装数据库处理方式:"
+    echo "  1) 保留数据库（推荐，复用旧密码）"
+    echo "  2) 重置数据库（清空数据，保留旧密码）"
+    echo "  3) 重置数据库（清空数据，重新生成密码）"
+    read -p "请选择 [1]: " db_choice
+    db_choice=${db_choice:-1}
+
+    case $db_choice in
+        1) REINSTALL_DB_MODE="keep" ;;
+        2) REINSTALL_DB_MODE="reset" ;;
+        3) REINSTALL_DB_MODE="reset-new" ;;
+        *) REINSTALL_DB_MODE="keep" ;;
+    esac
+
+    apply_reinstall_db_mode
 }
 
 resolve_domain_ips() {
@@ -1096,6 +1175,10 @@ main() {
         run_update
     fi
 
+    if [ -n "${LS_REINSTALL_DB:-}" ] && [ -z "$REINSTALL_DB_MODE" ]; then
+        REINSTALL_DB_MODE="${LS_REINSTALL_DB}"
+    fi
+
     check_requirements
     install_dependencies
     install_docker
@@ -1122,12 +1205,29 @@ main() {
                 ;;
             2)
                 FORCE_REINSTALL=true
+                if [ "$NON_INTERACTIVE" = true ]; then
+                    if [ -z "$REINSTALL_DB_MODE" ]; then
+                        REINSTALL_DB_MODE="keep"
+                    fi
+                    apply_reinstall_db_mode
+                else
+                    prompt_reinstall_db_mode
+                fi
                 ;;
             3)
                 log_info "已退出"
                 exit 0
                 ;;
         esac
+    fi
+
+    if [ "$FORCE_REINSTALL" = true ] && [ -f ".env" ] && [ -z "$REINSTALL_DB_MODE" ]; then
+        if [ "$NON_INTERACTIVE" = true ]; then
+            REINSTALL_DB_MODE="keep"
+            apply_reinstall_db_mode
+        else
+            prompt_reinstall_db_mode
+        fi
     fi
 
     if [ "$NON_INTERACTIVE" = true ]; then
@@ -1147,10 +1247,37 @@ main() {
         ENABLE_NGINX_PROXY="no"
     fi
 
-    MYSQL_ROOT_PASSWORD=$(generate_password 20)
-    MYSQL_PASSWORD=$(generate_password 16)
-    REDIS_PASSWORD=$(generate_password 16)
-    JWT_SECRET=$(generate_secret)
+    if [ "$REUSE_SECRETS" = true ]; then
+        if ! load_existing_secrets; then
+            log_error "未找到旧 .env，无法保留数据库密码"
+            log_error "请确认当前目录存在 .env，或选择重置数据库"
+            exit 1
+        fi
+    fi
+
+    if [ "$RESET_VOLUMES" = true ]; then
+        reset_data_volumes
+    fi
+
+    if [ "$REINSTALL_DB_MODE" = "reset-new" ]; then
+        MYSQL_ROOT_PASSWORD=""
+        MYSQL_PASSWORD=""
+        REDIS_PASSWORD=""
+        JWT_SECRET=""
+    fi
+
+    if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+        MYSQL_ROOT_PASSWORD=$(generate_password 20)
+    fi
+    if [ -z "$MYSQL_PASSWORD" ]; then
+        MYSQL_PASSWORD=$(generate_password 16)
+    fi
+    if [ -z "$REDIS_PASSWORD" ]; then
+        REDIS_PASSWORD=$(generate_password 16)
+    fi
+    if [ -z "$JWT_SECRET" ]; then
+        JWT_SECRET=$(generate_secret)
+    fi
 
     create_directories
     create_env_file
