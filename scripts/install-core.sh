@@ -759,10 +759,34 @@ EOF
     log_success "前端配置更新完成"
 }
 
+disable_certbot_auto_renew() {
+    local removed=false
+    if [ -f /etc/cron.d/certbot-renew ]; then
+        rm -f /etc/cron.d/certbot-renew
+        removed=true
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        if systemctl list-unit-files 2>/dev/null | grep -q "^certbot.timer"; then
+            systemctl stop certbot.timer >/dev/null 2>&1 || true
+            systemctl disable certbot.timer >/dev/null 2>&1 || true
+            removed=true
+        fi
+    fi
+
+    if [ "$removed" = true ]; then
+        log_info "已禁用 Let's Encrypt 自动续期任务"
+    fi
+}
+
 generate_ssl_cert() {
     if [ "$SSL_MODE" = "http" ]; then
         log_info "HTTP 模式，跳过证书生成"
         return 0
+    fi
+
+    if [ "$SSL_MODE" != "letsencrypt" ]; then
+        disable_certbot_auto_renew
     fi
 
     local ssl_manager="${ROOT_DIR}/ssl-manager.sh"
