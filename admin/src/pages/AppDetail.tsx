@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Tabs, Button, Descriptions, Tag, Input, message, Spin, Card, Table, Space, Modal, Form, InputNumber, Upload, Select, Progress, Switch, App } from 'antd';
 import { ArrowLeftOutlined, CopyOutlined, KeyOutlined, PlusOutlined, UploadOutlined, EditOutlined, CodeOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
-import { appApi, hotUpdateApi, secureScriptApi, instructionApi } from '../api';
+import { appApi, hotUpdateApi, secureScriptApi, instructionApi, publishTaskApi } from '../api';
 import dayjs from 'dayjs';
 
 const { Option } = Select;
@@ -24,6 +24,7 @@ const AppDetail: React.FC = () => {
   const [versionFileList, setVersionFileList] = useState<any[]>([]);
   const [creatingVersion, setCreatingVersion] = useState(false);
   const [versionUploadPercent, setVersionUploadPercent] = useState(0);
+  const [versionActionLoading, setVersionActionLoading] = useState<Record<string, boolean>>({});
 
   // 安全脚本相关
   const [scripts, setScripts] = useState<any[]>([]);
@@ -145,12 +146,21 @@ const AppDetail: React.FC = () => {
   };
 
   const handlePublishVersion = async (versionId: string) => {
+    const loadingKey = `${versionId}:publish`;
+    if (versionActionLoading[loadingKey]) {
+      return;
+    }
     try {
-      await hotUpdateApi.publish(versionId);
+      setVersionActionLoading((prev) => ({ ...prev, [loadingKey]: true }));
+      const task: any = await publishTaskApi.createHotUpdateTask(versionId, 'publish');
+      await waitPublishTask(task?.task_id);
       message.success('发布成功');
       fetchVersions();
     } catch (error) {
       console.error(error);
+      message.error((error as any)?.message || '发布失败');
+    } finally {
+      setVersionActionLoading((prev) => ({ ...prev, [loadingKey]: false }));
     }
   };
 
@@ -159,12 +169,21 @@ const AppDetail: React.FC = () => {
       title: '确认废弃',
       content: '废弃后该版本将不再提供下载，确定吗？',
       onOk: async () => {
+        const loadingKey = `${versionId}:deprecate`;
+        if (versionActionLoading[loadingKey]) {
+          return;
+        }
         try {
-          await hotUpdateApi.deprecate(versionId);
+          setVersionActionLoading((prev) => ({ ...prev, [loadingKey]: true }));
+          const task: any = await publishTaskApi.createHotUpdateTask(versionId, 'deprecate');
+          await waitPublishTask(task?.task_id);
           message.success('已废弃');
           fetchVersions();
         } catch (error) {
           console.error(error);
+          message.error((error as any)?.message || '废弃失败');
+        } finally {
+          setVersionActionLoading((prev) => ({ ...prev, [loadingKey]: false }));
         }
       },
     });
@@ -175,12 +194,21 @@ const AppDetail: React.FC = () => {
       title: '确认回滚',
       content: '回滚后该版本将停止推送，确定吗？',
       onOk: async () => {
+        const loadingKey = `${versionId}:rollback`;
+        if (versionActionLoading[loadingKey]) {
+          return;
+        }
         try {
-          await hotUpdateApi.rollback(versionId);
+          setVersionActionLoading((prev) => ({ ...prev, [loadingKey]: true }));
+          const task: any = await publishTaskApi.createHotUpdateTask(versionId, 'rollback');
+          await waitPublishTask(task?.task_id);
           message.success('回滚成功');
           fetchVersions();
         } catch (error) {
           console.error(error);
+          message.error((error as any)?.message || '回滚失败');
+        } finally {
+          setVersionActionLoading((prev) => ({ ...prev, [loadingKey]: false }));
         }
       },
     });
@@ -201,6 +229,28 @@ const AppDetail: React.FC = () => {
       },
     });
   };
+
+  const waitPublishTask = async (taskId: string, timeoutMs = 120000): Promise<any> => {
+    if (!taskId) {
+      throw new Error('任务创建失败');
+    }
+
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const task: any = await publishTaskApi.get(taskId);
+      if (task.status === 'success') {
+        return task;
+      }
+      if (task.status === 'failed') {
+        throw new Error(task.error_message || '任务执行失败');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+    throw new Error('任务执行超时，请在审计日志中查看结果');
+  };
+
+  const isVersionActionBusy = (versionId: string) =>
+    Object.keys(versionActionLoading).some((key) => key.startsWith(`${versionId}:`) && versionActionLoading[key]);
 
   // ==================== 安全脚本 ====================
   const fetchScripts = async () => {
@@ -396,18 +446,44 @@ const AppDetail: React.FC = () => {
                   <Space>
                     {record.status === 'draft' && (
                       <>
-                        <Button type="link" size="small" onClick={() => handlePublishVersion(record.id)}>发布</Button>
-                        <Button type="link" size="small" danger onClick={() => handleDeleteVersion(record.id)}>删除</Button>
+                        <Button
+                          type="link"
+                          size="small"
+                          loading={versionActionLoading[`${record.id}:publish`]}
+                          disabled={isVersionActionBusy(record.id)}
+                          onClick={() => handlePublishVersion(record.id)}
+                        >
+                          发布
+                        </Button>
+                        <Button type="link" size="small" danger disabled={isVersionActionBusy(record.id)} onClick={() => handleDeleteVersion(record.id)}>删除</Button>
                       </>
                     )}
                     {record.status === 'published' && (
                       <>
-                        <Button type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleRollbackVersion(record.id)}>回滚</Button>
-                        <Button type="link" size="small" danger onClick={() => handleDeprecateVersion(record.id)}>废弃</Button>
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<RollbackOutlined />}
+                          loading={versionActionLoading[`${record.id}:rollback`]}
+                          disabled={isVersionActionBusy(record.id)}
+                          onClick={() => handleRollbackVersion(record.id)}
+                        >
+                          回滚
+                        </Button>
+                        <Button
+                          type="link"
+                          size="small"
+                          danger
+                          loading={versionActionLoading[`${record.id}:deprecate`]}
+                          disabled={isVersionActionBusy(record.id)}
+                          onClick={() => handleDeprecateVersion(record.id)}
+                        >
+                          废弃
+                        </Button>
                       </>
                     )}
                     {(record.status === 'rollback' || record.status === 'deprecated') && (
-                      <Button type="link" size="small" danger onClick={() => handleDeleteVersion(record.id)}>删除</Button>
+                      <Button type="link" size="small" danger disabled={isVersionActionBusy(record.id)} onClick={() => handleDeleteVersion(record.id)}>删除</Button>
                     )}
                   </Space>
                 ),

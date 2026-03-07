@@ -26,6 +26,8 @@ type HotUpdateInfo struct {
 	DownloadURL   string `json:"download_url"`
 	FileSize      int64  `json:"file_size"`
 	FileHash      string `json:"file_hash"`
+	FileSignature string `json:"file_signature"`
+	SignatureAlg  string `json:"signature_alg"`
 	Changelog     string `json:"changelog"`
 	ForceUpdate   bool   `json:"force_update"`
 	MinAppVersion string `json:"min_app_version"`
@@ -250,6 +252,13 @@ func (m *HotUpdateManager) DownloadUpdate(info *HotUpdateInfo) (string, error) {
 	if info.FileHash != "" && fileHash != info.FileHash {
 		os.Remove(filePath)
 		err := fmt.Errorf("文件校验失败")
+		m.reportStatus(info.ID, HotUpdateStatusFailed, err.Error())
+		m.notifyCallback(HotUpdateStatusFailed, 0, err)
+		return "", err
+	}
+
+	if err := m.client.verifyDownloadedFileSignature(fileHash, downloaded, info.FileSignature, info.SignatureAlg); err != nil {
+		_ = os.Remove(filePath)
 		m.reportStatus(info.ID, HotUpdateStatusFailed, err.Error())
 		m.notifyCallback(HotUpdateStatusFailed, 0, err)
 		return "", err

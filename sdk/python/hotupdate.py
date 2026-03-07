@@ -217,6 +217,8 @@ class HotUpdateManager:
                 self._notify_callback(HotUpdateStatus.FAILED, 0, error)
                 raise error
 
+            self._verify_update_signature(update_info, file_hash, downloaded)
+
             self._notify_callback(HotUpdateStatus.DOWNLOADING, 1)
             return file_path
 
@@ -448,6 +450,29 @@ class HotUpdateManager:
                 self.callback(status, progress, error)
             except:
                 pass
+
+    def _verify_update_signature(self, update_info: Dict, file_hash: str, file_size: int):
+        file_signature = update_info.get('file_signature', '')
+        signature_alg = update_info.get('signature_alg', '')
+
+        if not file_signature:
+            if getattr(self.client, 'require_signature', False):
+                raise HotUpdateError("缺少文件签名")
+            return
+
+        if signature_alg and signature_alg.upper() != 'RSA-SHA256':
+            raise HotUpdateError(f"不支持的签名算法: {signature_alg}")
+
+        if not getattr(self.client, '_public_key', None):
+            if getattr(self.client, 'require_signature', False):
+                raise HotUpdateError("未配置公钥，无法验证文件签名")
+            return
+
+        payload = f"{file_hash.lower()}:{file_size}".encode()
+        try:
+            self.client._verify_signature(payload, file_signature)
+        except Exception as e:
+            raise HotUpdateError(f"文件签名验证失败: {e}")
 
     def _backup_current_version(self, source_dir: str, backup_path: str):
         """备份当前版本"""

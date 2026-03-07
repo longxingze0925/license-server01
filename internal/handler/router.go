@@ -59,6 +59,7 @@ func SetupRouter(r *gin.Engine) {
 	deviceHandler := NewDeviceHandler()
 	statsHandler := NewStatisticsHandler()
 	auditHandler := NewAuditHandler()
+	publishTaskHandler := NewPublishTaskHandler()
 	exportHandler := NewExportHandler()
 	hotUpdateHandler := NewHotUpdateHandler()
 	secureScriptHandler := NewSecureScriptHandler()
@@ -285,6 +286,7 @@ func SetupRouter(r *gin.Engine) {
 			releases.PUT("/:id", middleware.PermissionMiddleware("app:update"), releaseHandler.Update)
 			releases.POST("/:id/publish", middleware.PermissionMiddleware("app:update"), releaseHandler.Publish)
 			releases.POST("/:id/deprecate", middleware.PermissionMiddleware("app:update"), releaseHandler.Deprecate)
+			releases.POST("/:id/tasks", middleware.PermissionMiddleware("app:update"), publishTaskHandler.CreateReleaseTask)
 			releases.DELETE("/:id", middleware.PermissionMiddleware("app:delete"), releaseHandler.Delete)
 		}
 
@@ -296,9 +298,13 @@ func SetupRouter(r *gin.Engine) {
 			hotupdate.POST("/:id/publish", middleware.PermissionMiddleware("app:update"), hotUpdateHandler.Publish)
 			hotupdate.POST("/:id/deprecate", middleware.PermissionMiddleware("app:update"), hotUpdateHandler.Deprecate)
 			hotupdate.POST("/:id/rollback", middleware.PermissionMiddleware("app:update"), hotUpdateHandler.Rollback)
+			hotupdate.POST("/:id/tasks", middleware.PermissionMiddleware("app:update"), publishTaskHandler.CreateHotUpdateTask)
 			hotupdate.DELETE("/:id", middleware.PermissionMiddleware("app:delete"), hotUpdateHandler.Delete)
 			hotupdate.GET("/:id/logs", hotUpdateHandler.GetLogs)
 		}
+
+		// 发布异步任务
+		admin.GET("/tasks/:id", middleware.PermissionMiddleware("app:update"), publishTaskHandler.GetTask)
 
 		// 安全脚本管理
 		secureScripts := admin.Group("/secure-scripts")

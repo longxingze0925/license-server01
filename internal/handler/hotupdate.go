@@ -141,6 +141,12 @@ func (h *HotUpdateHandler) Create(c *gin.Context) {
 			response.BadRequest(c, fmt.Sprintf("更新包过大，最大支持 %dMB", maxUploadBytes>>20))
 			return
 		}
+		fileSignature, err := signFileSignature(app.PrivateKey, fileHash, fileSize)
+		if err != nil {
+			_ = os.Remove(filePath)
+			response.ServerError(c, err.Error())
+			return
+		}
 
 		downloadURL := fmt.Sprintf("/api/client/hotupdate/download/%s", filename)
 
@@ -149,10 +155,12 @@ func (h *HotUpdateHandler) Create(c *gin.Context) {
 			hotUpdate.PatchURL = downloadURL
 			hotUpdate.PatchSize = fileSize
 			hotUpdate.PatchHash = fileHash
+			hotUpdate.PatchSignature = fileSignature
 		} else {
 			hotUpdate.FullURL = downloadURL
 			hotUpdate.FullSize = fileSize
 			hotUpdate.FullHash = fileHash
+			hotUpdate.FullSignature = fileSignature
 		}
 	}
 
@@ -232,6 +240,12 @@ func (h *HotUpdateHandler) Upload(c *gin.Context) {
 		response.BadRequest(c, fmt.Sprintf("更新包过大，最大支持 %dMB", maxUploadBytes>>20))
 		return
 	}
+	fileSignature, err := signFileSignature(app.PrivateKey, fileHash, fileSize)
+	if err != nil {
+		_ = os.Remove(filePath)
+		response.ServerError(c, err.Error())
+		return
+	}
 
 	downloadURL := fmt.Sprintf("/api/client/hotupdate/download/%s", filename)
 
@@ -240,20 +254,24 @@ func (h *HotUpdateHandler) Upload(c *gin.Context) {
 		hotUpdate.PatchURL = downloadURL
 		hotUpdate.PatchSize = fileSize
 		hotUpdate.PatchHash = fileHash
+		hotUpdate.PatchSignature = fileSignature
 	} else {
 		hotUpdate.FullURL = downloadURL
 		hotUpdate.FullSize = fileSize
 		hotUpdate.FullHash = fileHash
+		hotUpdate.FullSignature = fileSignature
 	}
 
 	model.DB.Save(&hotUpdate)
 
 	response.Success(c, gin.H{
-		"id":           hotUpdate.ID,
-		"type":         uploadType,
-		"download_url": downloadURL,
-		"file_size":    fileSize,
-		"file_hash":    fileHash,
+		"id":             hotUpdate.ID,
+		"type":           uploadType,
+		"download_url":   downloadURL,
+		"file_size":      fileSize,
+		"file_hash":      fileHash,
+		"file_signature": fileSignature,
+		"signature_alg":  fileSignatureAlgorithm,
 	})
 }
 
@@ -289,8 +307,12 @@ func (h *HotUpdateHandler) List(c *gin.Context) {
 			"patch_type":         hu.PatchType,
 			"patch_url":          hu.PatchURL,
 			"patch_size":         hu.PatchSize,
+			"patch_hash":         hu.PatchHash,
+			"patch_signature":    hu.PatchSignature,
 			"full_url":           hu.FullURL,
 			"full_size":          hu.FullSize,
+			"full_hash":          hu.FullHash,
+			"full_signature":     hu.FullSignature,
 			"changelog":          hu.Changelog,
 			"force_update":       hu.ForceUpdate,
 			"rollout_percentage": hu.RolloutPercent,
@@ -333,9 +355,11 @@ func (h *HotUpdateHandler) Get(c *gin.Context) {
 		"patch_url":          hotUpdate.PatchURL,
 		"patch_size":         hotUpdate.PatchSize,
 		"patch_hash":         hotUpdate.PatchHash,
+		"patch_signature":    hotUpdate.PatchSignature,
 		"full_url":           hotUpdate.FullURL,
 		"full_size":          hotUpdate.FullSize,
 		"full_hash":          hotUpdate.FullHash,
+		"full_signature":     hotUpdate.FullSignature,
 		"changelog":          hotUpdate.Changelog,
 		"force_update":       hotUpdate.ForceUpdate,
 		"min_app_version":    hotUpdate.MinAppVersion,
@@ -674,6 +698,8 @@ func (h *HotUpdateHandler) CheckUpdate(c *gin.Context) {
 		result["download_url"] = downloadURL
 		result["file_size"] = hotUpdate.PatchSize
 		result["file_hash"] = hotUpdate.PatchHash
+		result["file_signature"] = hotUpdate.PatchSignature
+		result["signature_alg"] = fileSignatureAlgorithm
 		result["update_type"] = "patch"
 	} else if hotUpdate.FullURL != "" {
 		downloadURL, err := buildClientDownloadURLWithToken(hotUpdate.FullURL, app.ID, machineID, downloadTokenKindHotUpdate)
@@ -684,6 +710,8 @@ func (h *HotUpdateHandler) CheckUpdate(c *gin.Context) {
 		result["download_url"] = downloadURL
 		result["file_size"] = hotUpdate.FullSize
 		result["file_hash"] = hotUpdate.FullHash
+		result["file_signature"] = hotUpdate.FullSignature
+		result["signature_alg"] = fileSignatureAlgorithm
 		result["update_type"] = "full"
 	}
 
@@ -718,6 +746,15 @@ func (h *HotUpdateHandler) DownloadUpdate(c *gin.Context) {
 		response.NotFound(c, "文件不存在")
 		return
 	}
+
+	if hotUpdate.PatchURL != "" && filepath.Base(hotUpdate.PatchURL) == filename {
+		c.Header("X-File-Hash", hotUpdate.PatchHash)
+		c.Header("X-File-Signature", hotUpdate.PatchSignature)
+	} else {
+		c.Header("X-File-Hash", hotUpdate.FullHash)
+		c.Header("X-File-Signature", hotUpdate.FullSignature)
+	}
+	c.Header("X-File-Signature-Alg", fileSignatureAlgorithm)
 
 	// 更新下载计数
 	// 从文件名解析热更新ID（简化处理，实际可通过查询参数传递）

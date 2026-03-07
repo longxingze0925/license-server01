@@ -131,6 +131,13 @@ func (h *ReleaseHandler) Upload(c *gin.Context) {
 		return
 	}
 
+	fileSignature, err := signFileSignature(app.PrivateKey, fileHash, fileSize)
+	if err != nil {
+		_ = os.Remove(filePath)
+		response.ServerError(c, err.Error())
+		return
+	}
+
 	downloadURL := fmt.Sprintf("/api/client/releases/download/%s", filename)
 
 	// 检查版本是否已存在
@@ -140,32 +147,36 @@ func (h *ReleaseHandler) Upload(c *gin.Context) {
 		existingRelease.DownloadURL = downloadURL
 		existingRelease.FileSize = fileSize
 		existingRelease.FileHash = fileHash
+		existingRelease.FileSignature = fileSignature
 		existingRelease.Changelog = changelog
 		existingRelease.ForceUpdate = forceUpdate
 		model.DB.Save(&existingRelease)
 
 		response.Success(c, gin.H{
-			"id":           existingRelease.ID,
-			"version":      existingRelease.Version,
-			"download_url": existingRelease.DownloadURL,
-			"file_size":    existingRelease.FileSize,
-			"file_hash":    existingRelease.FileHash,
-			"updated":      true,
+			"id":             existingRelease.ID,
+			"version":        existingRelease.Version,
+			"download_url":   existingRelease.DownloadURL,
+			"file_size":      existingRelease.FileSize,
+			"file_hash":      existingRelease.FileHash,
+			"file_signature": existingRelease.FileSignature,
+			"signature_alg":  fileSignatureAlgorithm,
+			"updated":        true,
 		})
 		return
 	}
 
 	// 创建新版本
 	release := model.AppRelease{
-		AppID:       appID,
-		Version:     version,
-		VersionCode: versionCode,
-		DownloadURL: downloadURL,
-		Changelog:   changelog,
-		FileSize:    fileSize,
-		FileHash:    fileHash,
-		ForceUpdate: forceUpdate,
-		Status:      model.ReleaseStatusDraft,
+		AppID:         appID,
+		Version:       version,
+		VersionCode:   versionCode,
+		DownloadURL:   downloadURL,
+		Changelog:     changelog,
+		FileSize:      fileSize,
+		FileHash:      fileHash,
+		FileSignature: fileSignature,
+		ForceUpdate:   forceUpdate,
+		Status:        model.ReleaseStatusDraft,
 	}
 
 	if err := model.DB.Create(&release).Error; err != nil {
@@ -174,12 +185,14 @@ func (h *ReleaseHandler) Upload(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"id":           release.ID,
-		"version":      release.Version,
-		"download_url": release.DownloadURL,
-		"file_size":    release.FileSize,
-		"file_hash":    release.FileHash,
-		"created":      true,
+		"id":             release.ID,
+		"version":        release.Version,
+		"download_url":   release.DownloadURL,
+		"file_size":      release.FileSize,
+		"file_hash":      release.FileHash,
+		"file_signature": release.FileSignature,
+		"signature_alg":  fileSignatureAlgorithm,
+		"created":        true,
 	})
 }
 
@@ -207,6 +220,7 @@ func (h *ReleaseHandler) List(c *gin.Context) {
 			"changelog":          release.Changelog,
 			"file_size":          release.FileSize,
 			"file_hash":          release.FileHash,
+			"file_signature":     release.FileSignature,
 			"force_update":       release.ForceUpdate,
 			"rollout_percentage": release.RolloutPercentage,
 			"status":             release.Status,
@@ -239,6 +253,7 @@ func (h *ReleaseHandler) Get(c *gin.Context) {
 		"changelog":          release.Changelog,
 		"file_size":          release.FileSize,
 		"file_hash":          release.FileHash,
+		"file_signature":     release.FileSignature,
 		"force_update":       release.ForceUpdate,
 		"rollout_percentage": release.RolloutPercentage,
 		"status":             release.Status,
@@ -385,5 +400,8 @@ func (h *ReleaseHandler) DownloadRelease(c *gin.Context) {
 		return
 	}
 
+	c.Header("X-File-Hash", release.FileHash)
+	c.Header("X-File-Signature", release.FileSignature)
+	c.Header("X-File-Signature-Alg", fileSignatureAlgorithm)
 	c.File(filePath)
 }

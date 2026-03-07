@@ -157,6 +157,15 @@ export const hotUpdateApi = {
   getLogs: (id: string, params?: any) => request.get(`/admin/hotupdate/${id}/logs`, { params }),
 };
 
+// 发布异步任务
+export const publishTaskApi = {
+  createHotUpdateTask: (id: string, action: 'publish' | 'deprecate' | 'rollback') =>
+    request.post(`/admin/hotupdate/${id}/tasks`, { action }),
+  createReleaseTask: (id: string, action: 'publish' | 'deprecate') =>
+    request.post(`/admin/releases/${id}/tasks`, { action }),
+  get: (id: string) => request.get(`/admin/tasks/${id}`),
+};
+
 // 安全脚本管理
 export const secureScriptApi = {
   list: (appId: string, params?: any) => request.get(`/admin/apps/${appId}/secure-scripts`, { params }),

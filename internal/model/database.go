@@ -72,6 +72,7 @@ func AutoMigrate() error {
 		&Webhook{},
 		&WebhookLog{},
 		&AuditLog{},
+		&PublishTask{},
 		&Setting{},
 		// 用户数据同步
 		&UserConfig{},

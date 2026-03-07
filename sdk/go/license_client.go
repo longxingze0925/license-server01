@@ -119,13 +119,15 @@ type DeviceInfo struct {
 
 // UpdateInfo 更新信息
 type UpdateInfo struct {
-	Version     string `json:"version"`
-	VersionCode int    `json:"version_code"`
-	DownloadURL string `json:"download_url"`
-	Changelog   string `json:"changelog"`
-	FileSize    int64  `json:"file_size"`
-	FileHash    string `json:"file_hash"`
-	ForceUpdate bool   `json:"force_update"`
+	Version       string `json:"version"`
+	VersionCode   int    `json:"version_code"`
+	DownloadURL   string `json:"download_url"`
+	Changelog     string `json:"changelog"`
+	FileSize      int64  `json:"file_size"`
+	FileHash      string `json:"file_hash"`
+	FileSignature string `json:"file_signature"`
+	SignatureAlg  string `json:"signature_alg"`
+	ForceUpdate   bool   `json:"force_update"`
 }
 
 // Client 授权客户端

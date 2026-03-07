@@ -23,14 +23,17 @@ func (AuditLog) TableName() string {
 
 // 操作类型常量
 const (
-	ActionCreate = "create"
-	ActionUpdate = "update"
-	ActionDelete = "delete"
-	ActionLogin  = "login"
-	ActionLogout = "logout"
-	ActionExport = "export"
-	ActionRevoke = "revoke"
-	ActionReset  = "reset"
+	ActionCreate    = "create"
+	ActionUpdate    = "update"
+	ActionDelete    = "delete"
+	ActionLogin     = "login"
+	ActionLogout    = "logout"
+	ActionExport    = "export"
+	ActionRevoke    = "revoke"
+	ActionReset     = "reset"
+	ActionPublish   = "publish"
+	ActionDeprecate = "deprecate"
+	ActionRollback  = "rollback"
 )
 
 // 资源类型常量
@@ -45,4 +48,6 @@ const (
 	ResourceDevice       = "device"
 	ResourceScript       = "script"
 	ResourceRelease      = "release"
+	ResourceHotUpdate    = "hotupdate"
+	ResourcePublishTask  = "publish_task"
 )

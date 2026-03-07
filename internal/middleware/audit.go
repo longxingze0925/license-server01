@@ -104,6 +104,10 @@ func parseActionFromPath(method, path string) (action, resource, resourceID stri
 			resource = model.ResourceScript
 		case "releases":
 			resource = model.ResourceRelease
+		case "hotupdate":
+			resource = model.ResourceHotUpdate
+		case "tasks":
+			resource = model.ResourcePublishTask
 		case "auth":
 			resource = model.ResourceUser
 		}
@@ -114,6 +118,12 @@ func parseActionFromPath(method, path string) (action, resource, resourceID stri
 	case "POST":
 		if strings.Contains(path, "/login") {
 			action = model.ActionLogin
+		} else if strings.Contains(path, "/publish") {
+			action = model.ActionPublish
+		} else if strings.Contains(path, "/deprecate") {
+			action = model.ActionDeprecate
+		} else if strings.Contains(path, "/rollback") {
+			action = model.ActionRollback
 		} else if strings.Contains(path, "/revoke") {
 			action = model.ActionRevoke
 		} else if strings.Contains(path, "/reset") {
@@ -145,7 +155,7 @@ func parseActionFromPath(method, path string) (action, resource, resourceID stri
 }
 
 func isResourceType(s string) bool {
-	types := []string{"apps", "licenses", "subscriptions", "devices", "customers", "members", "scripts", "releases"}
+	types := []string{"apps", "licenses", "subscriptions", "devices", "customers", "members", "scripts", "releases", "hotupdate", "tasks"}
 	for _, t := range types {
 		if s == t {
 			return true
@@ -156,12 +166,15 @@ func isResourceType(s string) bool {
 
 func generateDescription(action, resource string) string {
 	actionMap := map[string]string{
-		model.ActionCreate: "创建",
-		model.ActionUpdate: "更新",
-		model.ActionDelete: "删除",
-		model.ActionLogin:  "登录",
-		model.ActionRevoke: "吊销",
-		model.ActionReset:  "重置",
+		model.ActionCreate:    "创建",
+		model.ActionUpdate:    "更新",
+		model.ActionDelete:    "删除",
+		model.ActionLogin:     "登录",
+		model.ActionRevoke:    "吊销",
+		model.ActionReset:     "重置",
+		model.ActionPublish:   "发布",
+		model.ActionDeprecate: "废弃",
+		model.ActionRollback:  "回滚",
 	}
 	resourceMap := map[string]string{
 		model.ResourceUser:         "用户",
@@ -174,6 +187,8 @@ func generateDescription(action, resource string) string {
 		model.ResourceDevice:       "设备",
 		model.ResourceScript:       "脚本",
 		model.ResourceRelease:      "版本",
+		model.ResourceHotUpdate:    "热更新",
+		model.ResourcePublishTask:  "发布任务",
 	}
 
 	a := actionMap[action]

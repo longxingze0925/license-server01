@@ -14,15 +14,15 @@ const (
 // Application 应用模型
 type Application struct {
 	BaseModel
-	TenantID    string    `gorm:"type:char(36);index;not null" json:"tenant_id"` // 所属租户
-	Name        string    `gorm:"type:varchar(100);not null" json:"name"`
-	Slug        string    `gorm:"type:varchar(50);index" json:"slug"` // URL友好标识
-	AppKey      string    `gorm:"type:varchar(64);uniqueIndex;not null" json:"app_key"`
-	AppSecret   string    `gorm:"type:varchar(128);not null" json:"-"`
-	PublicKey   string    `gorm:"type:text;not null" json:"public_key"`
-	PrivateKey  string    `gorm:"type:text;not null" json:"-"`
-	Description string    `gorm:"type:text" json:"description"`
-	Icon        string    `gorm:"type:varchar(500)" json:"icon"`
+	TenantID    string `gorm:"type:char(36);index;not null" json:"tenant_id"` // 所属租户
+	Name        string `gorm:"type:varchar(100);not null" json:"name"`
+	Slug        string `gorm:"type:varchar(50);index" json:"slug"` // URL友好标识
+	AppKey      string `gorm:"type:varchar(64);uniqueIndex;not null" json:"app_key"`
+	AppSecret   string `gorm:"type:varchar(128);not null" json:"-"`
+	PublicKey   string `gorm:"type:text;not null" json:"public_key"`
+	PrivateKey  string `gorm:"type:text;not null" json:"-"`
+	Description string `gorm:"type:text" json:"description"`
+	Icon        string `gorm:"type:varchar(500)" json:"icon"`
 	// 授权配置
 	AuthMode          AuthMode  `gorm:"type:varchar(20);default:both" json:"auth_mode"` // 授权模式
 	HeartbeatInterval int       `gorm:"default:3600" json:"heartbeat_interval"`         // 心跳间隔(秒)
@@ -60,6 +60,7 @@ type AppRelease struct {
 	Changelog         string        `gorm:"type:text" json:"changelog"`
 	FileSize          int64         `json:"file_size"`
 	FileHash          string        `gorm:"type:varchar(64)" json:"file_hash"`
+	FileSignature     string        `gorm:"type:text" json:"file_signature"`
 	ForceUpdate       bool          `gorm:"default:false" json:"force_update"`
 	RolloutPercentage int           `gorm:"default:100" json:"rollout_percentage"` // 灰度比例
 	Status            ReleaseStatus `gorm:"type:varchar(20);default:draft" json:"status"`
@@ -100,28 +101,30 @@ type Script struct {
 type HotUpdate struct {
 	BaseModel
 	AppID           string          `gorm:"type:varchar(36);not null;index" json:"app_id"`
-	FromVersion     string          `gorm:"type:varchar(20);not null" json:"from_version"`      // 源版本（* 表示任意版本）
-	ToVersion       string          `gorm:"type:varchar(20);not null" json:"to_version"`        // 目标版本
-	VersionCode     int             `gorm:"default:0" json:"version_code"`                      // 版本代码
-	PatchType       HotUpdateType   `gorm:"type:varchar(20);default:full" json:"patch_type"`    // 更新类型
-	UpdateMode      string          `gorm:"type:varchar(20);default:mixed" json:"update_mode"`  // 更新模式: exe/script/resource/mixed
-	PatchURL        string          `gorm:"type:varchar(500)" json:"patch_url"`                 // 补丁下载地址
-	PatchSize       int64           `json:"patch_size"`                                         // 补丁大小
-	PatchHash       string          `gorm:"type:varchar(64)" json:"patch_hash"`                 // 补丁哈希
-	FullURL         string          `gorm:"type:varchar(500)" json:"full_url"`                  // 完整包下载地址
-	FullSize        int64           `json:"full_size"`                                          // 完整包大小
-	FullHash        string          `gorm:"type:varchar(64)" json:"full_hash"`                  // 完整包哈希
-	Manifest        string          `gorm:"type:text" json:"manifest"`                          // 更新清单 JSON
-	Changelog       string          `gorm:"type:text" json:"changelog"`                         // 更新日志
-	ForceUpdate     bool            `gorm:"default:false" json:"force_update"`                  // 是否强制更新
-	RestartRequired bool            `gorm:"default:false" json:"restart_required"`              // 是否需要重启
-	MinAppVersion   string          `gorm:"type:varchar(20)" json:"min_app_version"`            // 最低支持版本
-	RolloutPercent  int             `gorm:"default:100" json:"rollout_percentage"`              // 灰度比例
-	Status          HotUpdateStatus `gorm:"type:varchar(20);default:draft" json:"status"`       // 状态
-	PublishedAt     *time.Time      `json:"published_at"`                                       // 发布时间
-	DownloadCount   int64           `gorm:"default:0" json:"download_count"`                    // 下载次数
-	SuccessCount    int64           `gorm:"default:0" json:"success_count"`                     // 成功次数
-	FailCount       int64           `gorm:"default:0" json:"fail_count"`                        // 失败次数
+	FromVersion     string          `gorm:"type:varchar(20);not null" json:"from_version"`     // 源版本（* 表示任意版本）
+	ToVersion       string          `gorm:"type:varchar(20);not null" json:"to_version"`       // 目标版本
+	VersionCode     int             `gorm:"default:0" json:"version_code"`                     // 版本代码
+	PatchType       HotUpdateType   `gorm:"type:varchar(20);default:full" json:"patch_type"`   // 更新类型
+	UpdateMode      string          `gorm:"type:varchar(20);default:mixed" json:"update_mode"` // 更新模式: exe/script/resource/mixed
+	PatchURL        string          `gorm:"type:varchar(500)" json:"patch_url"`                // 补丁下载地址
+	PatchSize       int64           `json:"patch_size"`                                        // 补丁大小
+	PatchHash       string          `gorm:"type:varchar(64)" json:"patch_hash"`                // 补丁哈希
+	PatchSignature  string          `gorm:"type:text" json:"patch_signature"`                  // 补丁签名
+	FullURL         string          `gorm:"type:varchar(500)" json:"full_url"`                 // 完整包下载地址
+	FullSize        int64           `json:"full_size"`                                         // 完整包大小
+	FullHash        string          `gorm:"type:varchar(64)" json:"full_hash"`                 // 完整包哈希
+	FullSignature   string          `gorm:"type:text" json:"full_signature"`                   // 完整包签名
+	Manifest        string          `gorm:"type:text" json:"manifest"`                         // 更新清单 JSON
+	Changelog       string          `gorm:"type:text" json:"changelog"`                        // 更新日志
+	ForceUpdate     bool            `gorm:"default:false" json:"force_update"`                 // 是否强制更新
+	RestartRequired bool            `gorm:"default:false" json:"restart_required"`             // 是否需要重启
+	MinAppVersion   string          `gorm:"type:varchar(20)" json:"min_app_version"`           // 最低支持版本
+	RolloutPercent  int             `gorm:"default:100" json:"rollout_percentage"`             // 灰度比例
+	Status          HotUpdateStatus `gorm:"type:varchar(20);default:draft" json:"status"`      // 状态
+	PublishedAt     *time.Time      `json:"published_at"`                                      // 发布时间
+	DownloadCount   int64           `gorm:"default:0" json:"download_count"`                   // 下载次数
+	SuccessCount    int64           `gorm:"default:0" json:"success_count"`                    // 成功次数
+	FailCount       int64           `gorm:"default:0" json:"fail_count"`                       // 失败次数
 	// 关联
 	Application *Application `gorm:"foreignKey:AppID" json:"application,omitempty"`
 }
@@ -149,16 +152,16 @@ func (HotUpdate) TableName() string {
 // HotUpdateLog 热更新日志
 type HotUpdateLog struct {
 	BaseModel
-	HotUpdateID  string              `gorm:"type:varchar(36);not null;index" json:"hot_update_id"`
-	DeviceID     string              `gorm:"type:varchar(36);index" json:"device_id"`
-	MachineID    string              `gorm:"type:varchar(64);index" json:"machine_id"`
-	FromVersion  string              `gorm:"type:varchar(20)" json:"from_version"`
-	ToVersion    string              `gorm:"type:varchar(20)" json:"to_version"`
-	Status       HotUpdateLogStatus  `gorm:"type:varchar(20)" json:"status"`
-	ErrorMessage string              `gorm:"type:text" json:"error_message"`
-	IPAddress    string              `gorm:"type:varchar(45)" json:"ip_address"`
-	StartedAt    *time.Time          `json:"started_at"`
-	CompletedAt  *time.Time          `json:"completed_at"`
+	HotUpdateID  string             `gorm:"type:varchar(36);not null;index" json:"hot_update_id"`
+	DeviceID     string             `gorm:"type:varchar(36);index" json:"device_id"`
+	MachineID    string             `gorm:"type:varchar(64);index" json:"machine_id"`
+	FromVersion  string             `gorm:"type:varchar(20)" json:"from_version"`
+	ToVersion    string             `gorm:"type:varchar(20)" json:"to_version"`
+	Status       HotUpdateLogStatus `gorm:"type:varchar(20)" json:"status"`
+	ErrorMessage string             `gorm:"type:text" json:"error_message"`
+	IPAddress    string             `gorm:"type:varchar(45)" json:"ip_address"`
+	StartedAt    *time.Time         `json:"started_at"`
+	CompletedAt  *time.Time         `json:"completed_at"`
 	// 关联
 	HotUpdate *HotUpdate `gorm:"foreignKey:HotUpdateID" json:"hot_update,omitempty"`
 }
@@ -166,12 +169,12 @@ type HotUpdateLog struct {
 type HotUpdateLogStatus string
 
 const (
-	HotUpdateLogStatusPending    HotUpdateLogStatus = "pending"    // 待更新
+	HotUpdateLogStatusPending     HotUpdateLogStatus = "pending"     // 待更新
 	HotUpdateLogStatusDownloading HotUpdateLogStatus = "downloading" // 下载中
-	HotUpdateLogStatusInstalling HotUpdateLogStatus = "installing" // 安装中
-	HotUpdateLogStatusSuccess    HotUpdateLogStatus = "success"    // 成功
-	HotUpdateLogStatusFailed     HotUpdateLogStatus = "failed"     // 失败
-	HotUpdateLogStatusRollback   HotUpdateLogStatus = "rollback"   // 已回滚
+	HotUpdateLogStatusInstalling  HotUpdateLogStatus = "installing"  // 安装中
+	HotUpdateLogStatusSuccess     HotUpdateLogStatus = "success"     // 成功
+	HotUpdateLogStatusFailed      HotUpdateLogStatus = "failed"      // 失败
+	HotUpdateLogStatusRollback    HotUpdateLogStatus = "rollback"    // 已回滚
 )
 
 func (HotUpdateLog) TableName() string {

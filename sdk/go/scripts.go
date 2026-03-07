@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // ScriptInfo 脚本信息
@@ -29,10 +30,12 @@ type ScriptVersionResponse struct {
 
 // ReleaseDownloadInfo 版本下载信息
 type ReleaseDownloadInfo struct {
-	Filename    string `json:"filename"`
-	DownloadURL string `json:"download_url"`
-	FileSize    int64  `json:"file_size"`
-	FileHash    string `json:"file_hash"`
+	Filename      string `json:"filename"`
+	DownloadURL   string `json:"download_url"`
+	FileSize      int64  `json:"file_size"`
+	FileHash      string `json:"file_hash"`
+	FileSignature string `json:"file_signature"`
+	SignatureAlg  string `json:"signature_alg"`
 }
 
 // ScriptManager 脚本管理器
@@ -267,6 +270,17 @@ func (m *ReleaseManager) GetLatestReleaseAndDownload(savePath string, progressCa
 
 	// 下载文件
 	if err := m.DownloadRelease(filename, savePath, progressCallback); err != nil {
+		return nil, err
+	}
+
+	actualHash, actualSize, err := hashFileSHA256(savePath)
+	if err != nil {
+		return nil, fmt.Errorf("计算文件哈希失败: %w", err)
+	}
+	if updateInfo.FileHash != "" && !strings.EqualFold(updateInfo.FileHash, actualHash) {
+		return nil, fmt.Errorf("文件校验失败: 期望 %s, 实际 %s", updateInfo.FileHash, actualHash)
+	}
+	if err := m.client.verifyDownloadedFileSignature(actualHash, actualSize, updateInfo.FileSignature, updateInfo.SignatureAlg); err != nil {
 		return nil, err
 	}
 

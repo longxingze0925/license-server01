@@ -527,13 +527,15 @@ func (h *ClientHandler) GetLatestRelease(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"version":      release.Version,
-		"version_code": release.VersionCode,
-		"download_url": downloadURL,
-		"changelog":    release.Changelog,
-		"file_size":    release.FileSize,
-		"file_hash":    release.FileHash,
-		"force_update": release.ForceUpdate,
+		"version":        release.Version,
+		"version_code":   release.VersionCode,
+		"download_url":   downloadURL,
+		"changelog":      release.Changelog,
+		"file_size":      release.FileSize,
+		"file_hash":      release.FileHash,
+		"file_signature": release.FileSignature,
+		"signature_alg":  fileSignatureAlgorithm,
+		"force_update":   release.ForceUpdate,
 	})
 }
 

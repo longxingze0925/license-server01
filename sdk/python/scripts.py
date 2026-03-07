@@ -26,6 +26,7 @@
 """
 
 import os
+import hashlib
 from typing import Optional, Dict, List, Callable, Tuple
 from dataclasses import dataclass
 from urllib.parse import quote, urlparse
@@ -59,6 +60,8 @@ class UpdateInfo:
     changelog: str
     file_size: int
     file_hash: str
+    file_signature: str
+    signature_alg: str
     force_update: bool
 
 
@@ -258,6 +261,7 @@ class ReleaseManager:
 
         # 下载文件
         self.download_release(filename, save_path, progress_callback)
+        self._verify_downloaded_release(save_path, update_info)
 
         return UpdateInfo(
             version=update_info.get('version', ''),
@@ -266,5 +270,45 @@ class ReleaseManager:
             changelog=update_info.get('changelog', ''),
             file_size=update_info.get('file_size', 0),
             file_hash=update_info.get('file_hash', ''),
+            file_signature=update_info.get('file_signature', ''),
+            signature_alg=update_info.get('signature_alg', ''),
             force_update=update_info.get('force_update', False)
         )
+
+    def _verify_downloaded_release(self, file_path: str, update_info: Dict) -> None:
+        hasher = hashlib.sha256()
+        file_size = 0
+        with open(file_path, 'rb') as f:
+            while True:
+                chunk = f.read(64 * 1024)
+                if not chunk:
+                    break
+                hasher.update(chunk)
+                file_size += len(chunk)
+
+        file_hash = hasher.hexdigest()
+        expected_hash = update_info.get('file_hash', '')
+        if expected_hash and file_hash.lower() != expected_hash.lower():
+            raise Exception(f"文件校验失败: 期望 {expected_hash}, 实际 {file_hash}")
+
+        self._verify_release_signature(update_info, file_hash, file_size)
+
+    def _verify_release_signature(self, update_info: Dict, file_hash: str, file_size: int) -> None:
+        file_signature = update_info.get('file_signature', '')
+        signature_alg = update_info.get('signature_alg', '')
+
+        if not file_signature:
+            if getattr(self.client, 'require_signature', False):
+                raise Exception("缺少文件签名")
+            return
+
+        if signature_alg and signature_alg.upper() != 'RSA-SHA256':
+            raise Exception(f"不支持的签名算法: {signature_alg}")
+
+        if not getattr(self.client, '_public_key', None):
+            if getattr(self.client, 'require_signature', False):
+                raise Exception("未配置公钥，无法验证文件签名")
+            return
+
+        payload = f"{file_hash.lower()}:{file_size}".encode()
+        self.client._verify_signature(payload, file_signature)
