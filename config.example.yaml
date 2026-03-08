@@ -92,6 +92,12 @@ security:
   download_token_secret: ""
   download_token_expire_seconds: 300
 
+  # 客户端会话 token（长期建议启用）
+  # access token 建议短效；refresh token 建议 7~30 天
+  client_access_token_secret: ""          # 留空复用 jwt.secret
+  client_access_token_expire_seconds: 900  # 15 分钟
+  client_refresh_token_expire_seconds: 2592000 # 30 天
+
 # ============================================
 # 生产环境部署检查清单
 # ============================================

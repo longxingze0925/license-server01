@@ -2,14 +2,17 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"license-server/internal/model"
+	"license-server/internal/pkg/clientauth"
 	"license-server/internal/pkg/crypto"
 	"license-server/internal/pkg/response"
 	"license-server/internal/service"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type ClientHandler struct{}
@@ -36,14 +39,23 @@ type DeviceInfo struct {
 
 // ActivateResponse 激活响应
 type ActivateResponse struct {
-	Valid         bool       `json:"valid"`
-	LicenseID     string     `json:"license_id"`
-	DeviceID      string     `json:"device_id"`
-	Type          string     `json:"type"`
-	ExpireAt      *time.Time `json:"expire_at"`
-	RemainingDays int        `json:"remaining_days"`
-	Features      []string   `json:"features"`
-	Signature     string     `json:"signature"`
+	Valid            bool       `json:"valid"`
+	LicenseID        string     `json:"license_id"`
+	DeviceID         string     `json:"device_id"`
+	Type             string     `json:"type"`
+	ExpireAt         *time.Time `json:"expire_at"`
+	RemainingDays    int        `json:"remaining_days"`
+	Features         []string   `json:"features"`
+	Signature        string     `json:"signature"`
+	AccessToken      string     `json:"access_token,omitempty"`
+	RefreshToken     string     `json:"refresh_token,omitempty"`
+	TokenType        string     `json:"token_type,omitempty"`
+	ExpiresIn        int        `json:"expires_in,omitempty"`
+	RefreshExpiresIn int        `json:"refresh_expires_in,omitempty"`
+	AccessExpiresAt  int64      `json:"access_expires_at,omitempty"`
+	RefreshExpiresAt int64      `json:"refresh_expires_at,omitempty"`
+	SessionID        string     `json:"session_id,omitempty"`
+	AuthMode         string     `json:"auth_mode,omitempty"`
 }
 
 // Activate 激活授权码
@@ -141,6 +153,10 @@ func (h *ClientHandler) Activate(c *gin.Context) {
 
 	// 绑定或更新设备
 	var device model.Device
+	customerID := ""
+	if license.CustomerID != nil {
+		customerID = *license.CustomerID
+	}
 	if deviceExists {
 		device = existingDevice
 		device.TenantID = license.TenantID
@@ -161,10 +177,6 @@ func (h *ClientHandler) Activate(c *gin.Context) {
 		}
 	} else {
 		now := time.Now()
-		customerID := ""
-		if license.CustomerID != nil {
-			customerID = *license.CustomerID
-		}
 		device = model.Device{
 			TenantID:     license.TenantID,
 			CustomerID:   customerID,
@@ -210,8 +222,41 @@ func (h *ClientHandler) Activate(c *gin.Context) {
 		Features:      features,
 	}
 
-	// 签名响应
-	dataBytes, _ := json.Marshal(respData)
+	sessionTokens, err := h.issueClientSession(c, &app, &device, customerID, clientauth.AuthModeLicense)
+	if err != nil {
+		response.ServerError(c, "创建客户端会话失败")
+		return
+	}
+	respData.AccessToken = sessionTokens.AccessToken
+	respData.RefreshToken = sessionTokens.RefreshToken
+	respData.TokenType = sessionTokens.TokenType
+	respData.ExpiresIn = sessionTokens.ExpiresIn
+	respData.RefreshExpiresIn = sessionTokens.RefreshExpiresIn
+	respData.AccessExpiresAt = sessionTokens.AccessExpiresAt
+	respData.RefreshExpiresAt = sessionTokens.RefreshExpiresAt
+	respData.SessionID = sessionTokens.SessionID
+	respData.AuthMode = sessionTokens.AuthMode
+
+	// 签名响应（使用与 SDK 一致的 key-sorted JSON，且不包含 signature 字段）
+	signPayload := map[string]interface{}{
+		"valid":              respData.Valid,
+		"license_id":         respData.LicenseID,
+		"device_id":          respData.DeviceID,
+		"type":               respData.Type,
+		"expire_at":          respData.ExpireAt,
+		"remaining_days":     respData.RemainingDays,
+		"features":           respData.Features,
+		"access_token":       respData.AccessToken,
+		"refresh_token":      respData.RefreshToken,
+		"token_type":         respData.TokenType,
+		"expires_in":         respData.ExpiresIn,
+		"refresh_expires_in": respData.RefreshExpiresIn,
+		"access_expires_at":  respData.AccessExpiresAt,
+		"refresh_expires_at": respData.RefreshExpiresAt,
+		"session_id":         respData.SessionID,
+		"auth_mode":          respData.AuthMode,
+	}
+	dataBytes, _ := json.Marshal(signPayload)
 	signature, err := crypto.Sign(app.PrivateKey, dataBytes)
 	if err == nil {
 		respData.Signature = signature
@@ -420,7 +465,31 @@ func (h *ClientHandler) Deactivate(c *gin.Context) {
 		return
 	}
 
-	model.DB.Delete(&device)
+	now := time.Now()
+	if err := model.DB.Transaction(func(tx *gorm.DB) error {
+		if device.LicenseID == nil || *device.LicenseID == "" {
+			return errors.New("设备授权信息异常")
+		}
+		if err := increaseLicenseUnbindUsed(tx, *device.LicenseID, app.TenantID, app.ID); err != nil {
+			return err
+		}
+		if err := tx.Delete(&model.Device{}, "id = ?", device.ID).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.ClientSession{}).
+			Where("device_id = ? AND revoked_at IS NULL", device.ID).
+			Updates(map[string]interface{}{
+				"revoked_at":   now,
+				"last_used_at": now,
+			}).Error
+	}); err != nil {
+		if errors.Is(err, errClientUnbindLimitExceeded) {
+			response.Error(c, 400, clientUnbindLimitExceededMessage)
+			return
+		}
+		response.ServerError(c, "解绑失败")
+		return
+	}
 
 	response.SuccessWithMessage(c, "解绑成功", nil)
 }
@@ -701,6 +770,21 @@ func (h *ClientHandler) ClientLogin(c *gin.Context) {
 		"remaining_days":  subscription.RemainingDays(),
 		"features":        features,
 	}
+
+	sessionTokens, err := h.issueClientSession(c, &app, &device, customer.ID, clientauth.AuthModeSubscription)
+	if err != nil {
+		response.ServerError(c, "创建客户端会话失败")
+		return
+	}
+	respData["access_token"] = sessionTokens.AccessToken
+	respData["refresh_token"] = sessionTokens.RefreshToken
+	respData["token_type"] = sessionTokens.TokenType
+	respData["expires_in"] = sessionTokens.ExpiresIn
+	respData["refresh_expires_in"] = sessionTokens.RefreshExpiresIn
+	respData["access_expires_at"] = sessionTokens.AccessExpiresAt
+	respData["refresh_expires_at"] = sessionTokens.RefreshExpiresAt
+	respData["session_id"] = sessionTokens.SessionID
+	respData["auth_mode"] = sessionTokens.AuthMode
 
 	// 签名
 	dataBytes, _ := json.Marshal(respData)

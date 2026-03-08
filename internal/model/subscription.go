@@ -5,12 +5,14 @@ import "time"
 // Subscription 订阅模型（账号密码模式）
 type Subscription struct {
 	BaseModel
-	TenantID     string             `gorm:"type:char(36);index;not null" json:"tenant_id"`      // 所属租户
-	CustomerID   string             `gorm:"type:char(36);index;not null" json:"customer_id"`    // 关联客户
-	ClientUserID *string            `gorm:"type:char(36);index" json:"client_user_id"`          // 关联客户端用户（可选）
+	TenantID     string             `gorm:"type:char(36);index;not null" json:"tenant_id"`   // 所属租户
+	CustomerID   string             `gorm:"type:char(36);index;not null" json:"customer_id"` // 关联客户
+	ClientUserID *string            `gorm:"type:char(36);index" json:"client_user_id"`       // 关联客户端用户（可选）
 	AppID        string             `gorm:"type:varchar(36);not null;index" json:"app_id"`
 	PlanType     PlanType           `gorm:"type:varchar(20);default:free" json:"plan_type"`
 	MaxDevices   int                `gorm:"default:1" json:"max_devices"`
+	UnbindLimit  int                `gorm:"default:5;not null" json:"unbind_limit"` // 客户端终身可解绑总次数
+	UnbindUsed   int                `gorm:"default:0;not null" json:"unbind_used"`  // 客户端已解绑次数
 	Features     string             `gorm:"type:json" json:"features"`
 	Status       SubscriptionStatus `gorm:"type:varchar(20);default:active" json:"status"`
 	StartAt      *time.Time         `json:"start_at"`
@@ -80,4 +82,18 @@ func (s *Subscription) RemainingDays() int {
 		days = 1
 	}
 	return days
+}
+
+// RemainingClientUnbindCount 客户端解绑剩余次数
+func (s *Subscription) RemainingClientUnbindCount() int {
+	remaining := s.UnbindLimit - s.UnbindUsed
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
+
+// CanClientUnbind 是否允许客户端继续解绑
+func (s *Subscription) CanClientUnbind() bool {
+	return s.UnbindUsed < s.UnbindLimit
 }

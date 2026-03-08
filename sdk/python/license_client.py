@@ -542,6 +542,12 @@ class LicenseClient:
                     content = self._encryption.decrypt(content)
 
                 self._license_info = json.loads(content)
+                if self._license_info and not self._check_signature_integrity():
+                    self._license_info = None
+                    try:
+                        os.remove(cache_path)
+                    except OSError:
+                        pass
             except Exception as e:
                 self._license_info = None
         elif os.path.exists(old_cache_path) and self.encrypt_cache:
@@ -549,6 +555,13 @@ class LicenseClient:
             try:
                 with open(old_cache_path, 'r', encoding='utf-8') as f:
                     self._license_info = json.load(f)
+                if self._license_info and not self._check_signature_integrity():
+                    self._license_info = None
+                    try:
+                        os.remove(old_cache_path)
+                    except OSError:
+                        pass
+                    return
                 # 保存为加密格式
                 self._save_cache()
                 # 删除旧的明文缓存
@@ -579,14 +592,18 @@ class LicenseClient:
             os.remove(old_cache_path)
         self._license_info = None
 
-    def _request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict:
+    def _request(self, method: str, endpoint: str, data: Optional[Dict] = None, headers: Optional[Dict] = None) -> Dict:
         """发送 HTTP 请求（使用证书固定）"""
         url = f"{self.server_url}/api/client{endpoint}"
+        headers = headers or {}
+        method_upper = method.upper()
         try:
-            if method == 'GET':
-                resp = self._session.get(url, params=data, timeout=self.timeout)
+            if method_upper == 'GET':
+                resp = self._session.get(url, params=data, headers=headers, timeout=self.timeout)
+            elif method_upper == 'DELETE':
+                resp = self._session.delete(url, json=data, headers=headers, timeout=self.timeout)
             else:
-                resp = self._session.post(url, json=data, timeout=self.timeout)
+                resp = self._session.post(url, json=data, headers=headers, timeout=self.timeout)
             result = resp.json()
             if result.get('code') != 0:
                 raise LicenseError(result.get('message', '请求失败'))
@@ -612,7 +629,7 @@ class LicenseClient:
             "machine_id": self.machine_id,
             "device_info": self._get_device_info()
         }
-        result = self._request('POST', '/auth/activate', data)
+        result = self._request_with_verification('POST', '/auth/activate', data)
         self._license_info = {
             **result,
             "license_key": license_key,
@@ -663,7 +680,7 @@ class LicenseClient:
             "machine_id": self.machine_id,
             "device_info": self._get_device_info()
         }
-        result = self._request('POST', '/auth/login', data)
+        result = self._request_with_verification('POST', '/auth/login', data)
         self._license_info = {
             **result,
             "email": email,
@@ -730,7 +747,7 @@ class LicenseClient:
                 "app_key": self.app_key,
                 "machine_id": self.machine_id
             }
-            result = self._request('POST', '/auth/verify', data)
+            result = self._request_with_verification('POST', '/auth/verify', data)
             if self._license_info:
                 self._license_info['last_verified_at'] = time.time()
                 self._license_info.update(result)
@@ -747,7 +764,7 @@ class LicenseClient:
                 "machine_id": self.machine_id,
                 "app_version": self._get_device_info().get('app_version', '')
             }
-            result = self._request('POST', '/auth/heartbeat', data)
+            result = self._request_with_verification('POST', '/auth/heartbeat', data)
             if self._license_info:
                 self._license_info['last_verified_at'] = time.time()
                 self._save_cache()
@@ -755,9 +772,108 @@ class LicenseClient:
         except LicenseError:
             return False
 
-    def deactivate(self) -> bool:
-        """解绑设备"""
+    def _check_signature_integrity(self) -> bool:
+        """检查当前授权信息的签名完整性"""
+        if not self.require_signature or not self._public_key:
+            return True
+        if not self._license_info:
+            return False
+
+        signature = self._license_info.get('signature', '')
+        if not signature:
+            return False
+
         try:
+            self._verify_response_signature(self._license_info, signature)
+            return True
+        except (LicenseError, SignatureVerificationError, SignatureMissingError, SignatureExpiredError):
+            return False
+
+    def _refresh_client_session(self) -> bool:
+        """刷新客户端会话 token"""
+        if not self._license_info:
+            return False
+
+        refresh_token = self._license_info.get('refresh_token', '')
+        if not refresh_token:
+            return False
+
+        try:
+            result = self._request('POST', '/auth/refresh', {"refresh_token": refresh_token})
+            access_token = result.get('access_token', '')
+            if not access_token:
+                return False
+            self._license_info['access_token'] = access_token
+            if result.get('refresh_token'):
+                self._license_info['refresh_token'] = result.get('refresh_token')
+            if result.get('token_type'):
+                self._license_info['token_type'] = result.get('token_type')
+            if result.get('session_id'):
+                self._license_info['session_id'] = result.get('session_id')
+            if result.get('auth_mode'):
+                self._license_info['auth_mode'] = result.get('auth_mode')
+            if result.get('expires_in') is not None:
+                self._license_info['expires_in'] = result.get('expires_in')
+            if result.get('refresh_expires_in') is not None:
+                self._license_info['refresh_expires_in'] = result.get('refresh_expires_in')
+            if result.get('access_expires_at') is not None:
+                self._license_info['access_expires_at'] = result.get('access_expires_at')
+            if result.get('refresh_expires_at') is not None:
+                self._license_info['refresh_expires_at'] = result.get('refresh_expires_at')
+            self._save_cache()
+            return True
+        except LicenseError:
+            return False
+
+    def _request_with_client_auth(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict:
+        """使用 access token 发起客户端会话请求，失败时自动 refresh 一次"""
+        if not self._license_info:
+            raise LicenseError("未登录")
+
+        access_token = self._license_info.get('access_token', '')
+        if not access_token:
+            raise LicenseError("缺少客户端会话令牌")
+
+        headers = {"Authorization": f"Bearer {access_token}"}
+        try:
+            return self._request(method, endpoint, data, headers=headers)
+        except LicenseError as e:
+            msg = str(e)
+            if any(k in msg for k in ["会话", "认证", "客户端令牌"]) and self._refresh_client_session():
+                access_token = self._license_info.get('access_token', '')
+                if not access_token:
+                    raise
+                headers = {"Authorization": f"Bearer {access_token}"}
+                return self._request(method, endpoint, data, headers=headers)
+            raise
+
+    def deactivate(self, password: Optional[str] = None) -> bool:
+        """解绑设备。订阅模式需要传入 password。"""
+        try:
+            auth_mode = (self._license_info or {}).get('auth_mode', '')
+            access_token = (self._license_info or {}).get('access_token', '')
+
+            if access_token:
+                mode = (auth_mode or '').strip().lower()
+                body: Dict[str, Union[str, bool]] = {}
+                if mode == 'subscription':
+                    if not password:
+                        return False
+                    email = (self._license_info or {}).get('email', '')
+                    if email:
+                        body['password'] = self._hash_password(password, email)
+                        body['password_hashed'] = True
+                    else:
+                        body['password'] = password
+
+                self._request_with_client_auth('DELETE', '/devices/self', body)
+                self._clear_cache()
+                self._stop_heartbeat = True
+                return True
+
+            # 兼容旧版（授权码模式）
+            if (auth_mode or '').strip().lower() == 'subscription':
+                return False
             data = {
                 "app_key": self.app_key,
                 "machine_id": self.machine_id
@@ -791,6 +907,9 @@ class LicenseClient:
         offline_days = (time.time() - last_verified) / 86400
         if offline_days > self.offline_grace_days:
             return self.verify()
+
+        if not self._check_signature_integrity():
+            return False
         return True
 
     def get_features(self) -> List[str]:

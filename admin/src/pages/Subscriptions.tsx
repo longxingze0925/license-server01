@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Modal, Form, Select, message, Tag, InputNumber, Descriptions, Input, Checkbox, App } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { subscriptionApi, appApi, customerApi } from '../api';
 import dayjs from 'dayjs';
 
@@ -85,6 +85,23 @@ const Subscriptions: React.FC = () => {
     }
   };
 
+  const handleEdit = async (record: any) => {
+    try {
+      const detail: any = await subscriptionApi.get(record.id);
+      const app = apps.find(a => a.id === detail.app_id);
+      setSelectedAppFeatures(app?.features || []);
+      setCurrentSubscription(detail);
+      form.setFieldsValue({
+        ...detail,
+        features: Array.isArray(detail.features) ? detail.features : [],
+        days: detail.remaining_days ?? 365,
+      });
+      setModalVisible(true);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const handleDelete = (record: any) => {
     modal.confirm({
       title: '确认删除',
@@ -116,6 +133,22 @@ const Subscriptions: React.FC = () => {
     } catch (error) {
       console.error(error);
     }
+  };
+
+  const handleResetUnbindCount = (record: any) => {
+    modal.confirm({
+      title: '重置解绑次数',
+      content: '确定要重置该订阅的客户端解绑次数吗？',
+      onOk: async () => {
+        try {
+          await subscriptionApi.resetUnbindCount(record.id);
+          message.success('解绑次数已重置');
+          fetchData(pagination.current, pagination.pageSize);
+        } catch (error) {
+          console.error(error);
+        }
+      },
+    });
   };
 
   const handleRenew = (record: any) => {
@@ -190,6 +223,11 @@ const Subscriptions: React.FC = () => {
     { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => getStatusTag(s) },
     { title: '最大设备数', dataIndex: 'max_devices', key: 'max_devices' },
     {
+      title: '解绑剩余',
+      key: 'unbind_remaining',
+      render: (_: any, record: any) => `${record.unbind_remaining ?? 0}/${record.unbind_limit ?? 0}`,
+    },
+    {
       title: '剩余天数',
       dataIndex: 'remaining_days',
       key: 'remaining_days',
@@ -207,6 +245,8 @@ const Subscriptions: React.FC = () => {
       render: (_: any, record: any) => (
         <Space>
           <Button type="link" size="small" onClick={() => handleView(record)}>详情</Button>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+          <Button type="link" size="small" onClick={() => handleResetUnbindCount(record)}>重置解绑</Button>
           <Button type="link" size="small" onClick={() => handleRenew(record)}>续费</Button>
           {record.status === 'active' && (
             <Button type="link" size="small" danger onClick={() => handleCancel(record)}>取消</Button>
@@ -274,6 +314,15 @@ const Subscriptions: React.FC = () => {
           <Form.Item name="max_devices" label="最大设备数" initialValue={1}>
             <InputNumber min={1} max={100} style={{ width: '100%' }} />
           </Form.Item>
+          <Form.Item
+            name="unbind_limit"
+            label="终身解绑总次数"
+            initialValue={5}
+            rules={[{ required: true, message: '请输入终身解绑总次数' }]}
+            extra="客户端累计解绑总上限，超限后只能管理员后台解绑"
+          >
+            <InputNumber min={0} max={1000} style={{ width: '100%' }} />
+          </Form.Item>
           <Form.Item name="days" label="有效天数" initialValue={365} rules={[{ required: true, message: '请输入有效天数' }]} extra="-1表示永久有效">
             <InputNumber min={-1} style={{ width: '100%' }} />
           </Form.Item>
@@ -312,6 +361,9 @@ const Subscriptions: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label="状态">{getStatusTag(currentSubscription.status)}</Descriptions.Item>
             <Descriptions.Item label="最大设备数">{currentSubscription.max_devices}</Descriptions.Item>
+            <Descriptions.Item label="终身解绑总次数">{currentSubscription.unbind_limit ?? 0}</Descriptions.Item>
+            <Descriptions.Item label="已用解绑次数">{currentSubscription.unbind_used ?? 0}</Descriptions.Item>
+            <Descriptions.Item label="剩余解绑次数">{currentSubscription.unbind_remaining ?? 0}</Descriptions.Item>
             <Descriptions.Item label="剩余天数">
               {currentSubscription.remaining_days === -1 ? '永久' : `${currentSubscription.remaining_days} 天`}
             </Descriptions.Item>

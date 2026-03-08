@@ -5,21 +5,49 @@ package license
 
 import (
 	"fmt"
+	"net/http"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
 
 // 集成测试配置 - 使用实际服务器
-const (
-	IntegrationServerURL = "http://localhost:8080"
-	IntegrationAppKey    = "18563102289d9bab79daa5e77479eb9a" // 从数据库获取的实际 AppKey
-	TestLicenseKey       = "F92B-73DA-C489-15C2"              // 测试授权码
-	TestEmail            = "test@test.com"                    // 测试账号
-	TestPassword         = "Test123456"                       // 测试密码
+var (
+	IntegrationServerURL = getEnvOrDefault("LS_INTEGRATION_SERVER_URL", "http://localhost:8081")
+	IntegrationAppKey    = getEnvOrDefault("LS_INTEGRATION_APP_KEY", "18563102289d9bab79daa5e77479eb9a")
+	TestLicenseKey       = getEnvOrDefault("LS_TEST_LICENSE_KEY", "F92B-73DA-C489-15C2")
+	TestEmail            = getEnvOrDefault("LS_TEST_EMAIL", "test@test.com")
+	TestPassword         = getEnvOrDefault("LS_TEST_PASSWORD", "Test123456")
 )
+
+func getEnvOrDefault(key, fallback string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func requireIntegrationServer(t *testing.T) {
+	t.Helper()
+
+	healthURL := strings.TrimRight(IntegrationServerURL, "/") + "/api/health"
+	httpClient := &http.Client{Timeout: 3 * time.Second}
+	resp, err := httpClient.Get(healthURL)
+	if err != nil {
+		t.Skipf("集成测试跳过: 无法访问 %s (%v)。请启动 license-server 或设置 LS_INTEGRATION_SERVER_URL。", healthURL, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Skipf("集成测试跳过: %s 返回 HTTP %d。请确认地址指向 license-server。", healthURL, resp.StatusCode)
+	}
+}
 
 // TestIntegration_Activate 测试授权码激活功能
 func TestIntegration_Activate(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 授权码激活 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -62,6 +90,7 @@ func TestIntegration_Activate(t *testing.T) {
 
 // TestIntegration_Login 测试账号密码登录功能
 func TestIntegration_Login(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 账号密码登录 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -105,6 +134,7 @@ func TestIntegration_Login(t *testing.T) {
 
 // TestIntegration_Heartbeat 测试心跳功能（订阅模式）
 func TestIntegration_Heartbeat(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 心跳功能（订阅模式） ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -146,6 +176,7 @@ func TestIntegration_Heartbeat(t *testing.T) {
 
 // TestIntegration_Verify 测试验证功能（订阅模式）
 func TestIntegration_Verify(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 验证功能（订阅模式） ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -196,6 +227,7 @@ func TestIntegration_Verify(t *testing.T) {
 
 // TestIntegration_Features 测试功能权限检查
 func TestIntegration_Features(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 功能权限检查 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -234,6 +266,7 @@ func TestIntegration_Features(t *testing.T) {
 
 // TestIntegration_FullWorkflow 测试完整工作流程
 func TestIntegration_FullWorkflow(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 完整工作流程 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -301,6 +334,7 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 
 // TestIntegration_CacheAndOffline 测试缓存和离线功能
 func TestIntegration_CacheAndOffline(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 缓存和离线功能 ==========")
 
 	// 创建第一个客户端并登录
@@ -359,6 +393,7 @@ func TestIntegration_CacheAndOffline(t *testing.T) {
 
 // TestIntegration_SecureClient 测试安全客户端
 func TestIntegration_SecureClient(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 安全客户端 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -395,6 +430,7 @@ func TestIntegration_SecureClient(t *testing.T) {
 
 // TestIntegration_HardenedClient 测试强化安全客户端
 func TestIntegration_HardenedClient(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 强化安全客户端 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,

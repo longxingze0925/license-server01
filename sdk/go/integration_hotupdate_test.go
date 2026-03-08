@@ -13,6 +13,7 @@ import (
 
 // TestIntegration_HotUpdate_CheckUpdate 测试检查更新功能
 func TestIntegration_HotUpdate_CheckUpdate(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 热更新 - 检查更新 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -58,6 +59,7 @@ func TestIntegration_HotUpdate_CheckUpdate(t *testing.T) {
 
 // TestIntegration_HotUpdate_GetHistory 测试获取更新历史
 func TestIntegration_HotUpdate_GetHistory(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 热更新 - 获取历史 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -94,6 +96,7 @@ func TestIntegration_HotUpdate_GetHistory(t *testing.T) {
 
 // TestIntegration_HotUpdate_Callback 测试更新回调
 func TestIntegration_HotUpdate_Callback(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 热更新 - 回调功能 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -134,6 +137,7 @@ func TestIntegration_HotUpdate_Callback(t *testing.T) {
 
 // TestIntegration_HotUpdate_VersionManagement 测试版本管理
 func TestIntegration_HotUpdate_VersionManagement(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 热更新 - 版本管理 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -161,6 +165,7 @@ func TestIntegration_HotUpdate_VersionManagement(t *testing.T) {
 
 // TestIntegration_HotUpdate_DirectorySetup 测试目录设置
 func TestIntegration_HotUpdate_DirectorySetup(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 热更新 - 目录设置 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,

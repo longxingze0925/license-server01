@@ -11,6 +11,7 @@ import (
 
 // TestIntegration_SecureScript_GetVersions 测试获取脚本版本列表
 func TestIntegration_SecureScript_GetVersions(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 安全脚本 - 获取版本列表 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -51,6 +52,7 @@ func TestIntegration_SecureScript_GetVersions(t *testing.T) {
 
 // TestIntegration_SecureScript_FetchScript 测试获取加密脚本
 func TestIntegration_SecureScript_FetchScript(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 安全脚本 - 获取加密脚本 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -93,6 +95,7 @@ func TestIntegration_SecureScript_FetchScript(t *testing.T) {
 
 // TestIntegration_SecureScript_CacheManagement 测试缓存管理
 func TestIntegration_SecureScript_CacheManagement(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 安全脚本 - 缓存管理 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -164,6 +167,7 @@ func TestIntegration_SecureScript_CacheManagement(t *testing.T) {
 
 // TestIntegration_SecureScript_ExecuteCallback 测试执行回调
 func TestIntegration_SecureScript_ExecuteCallback(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 安全脚本 - 执行回调 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -223,6 +227,7 @@ func TestIntegration_SecureScript_ExecuteCallback(t *testing.T) {
 
 // TestIntegration_SecureScript_ExecuteWithMockScript 测试使用模拟脚本执行
 func TestIntegration_SecureScript_ExecuteWithMockScript(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 安全脚本 - 模拟脚本执行 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -277,6 +282,7 @@ func TestIntegration_SecureScript_ExecuteWithMockScript(t *testing.T) {
 
 // TestIntegration_SecureScript_ManagerOptions 测试管理器选项
 func TestIntegration_SecureScript_ManagerOptions(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 安全脚本 - 管理器选项 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -323,6 +329,7 @@ func TestIntegration_SecureScript_ManagerOptions(t *testing.T) {
 
 // TestIntegration_SecureScript_FullWorkflow 测试完整安全脚本工作流
 func TestIntegration_SecureScript_FullWorkflow(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 安全脚本 - 完整工作流 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -420,6 +427,7 @@ func TestIntegration_SecureScript_FullWorkflow(t *testing.T) {
 
 // TestIntegration_SecureScript_ConcurrentAccess 测试并发访问
 func TestIntegration_SecureScript_ConcurrentAccess(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 安全脚本 - 并发访问 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -490,6 +498,7 @@ func TestIntegration_SecureScript_ConcurrentAccess(t *testing.T) {
 
 // TestIntegration_SecureScript_ErrorHandling 测试错误处理
 func TestIntegration_SecureScript_ErrorHandling(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 安全脚本 - 错误处理 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,

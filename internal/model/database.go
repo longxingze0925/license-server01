@@ -90,5 +90,7 @@ func AutoMigrate() error {
 		&SyncLog{},
 		// 客户端数据同步
 		&ClientSyncData{},
+		// 客户端会话
+		&ClientSession{},
 	)
 }

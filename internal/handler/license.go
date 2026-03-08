@@ -25,6 +25,7 @@ type CreateLicenseRequest struct {
 	Type         string   `json:"type"`
 	DurationDays int      `json:"duration_days" binding:"required"`
 	MaxDevices   int      `json:"max_devices"`
+	UnbindLimit  int      `json:"unbind_limit"`
 	Features     []string `json:"features"`
 	Notes        string   `json:"notes"`
 	Count        int      `json:"count"` // 批量生成数量
@@ -65,6 +66,13 @@ func (h *LicenseHandler) Create(c *gin.Context) {
 	if req.MaxDevices == 0 {
 		req.MaxDevices = app.MaxDevicesDefault
 	}
+	if req.UnbindLimit < 0 {
+		response.BadRequest(c, "解绑次数上限不能小于0")
+		return
+	}
+	if req.UnbindLimit == 0 {
+		req.UnbindLimit = 5
+	}
 	if req.Count == 0 {
 		req.Count = 1
 	}
@@ -90,6 +98,7 @@ func (h *LicenseHandler) Create(c *gin.Context) {
 			Type:         model.LicenseType(req.Type),
 			DurationDays: req.DurationDays,
 			MaxDevices:   req.MaxDevices,
+			UnbindLimit:  req.UnbindLimit,
 			Features:     featuresJSON,
 			Metadata:     "{}",
 			Notes:        req.Notes,
@@ -118,13 +127,16 @@ func (h *LicenseHandler) Create(c *gin.Context) {
 	var result []gin.H
 	for _, license := range licenses {
 		result = append(result, gin.H{
-			"id":            license.ID,
-			"license_key":   license.LicenseKey,
-			"type":          license.Type,
-			"duration_days": license.DurationDays,
-			"max_devices":   license.MaxDevices,
-			"status":        license.Status,
-			"created_at":    license.CreatedAt,
+			"id":               license.ID,
+			"license_key":      license.LicenseKey,
+			"type":             license.Type,
+			"duration_days":    license.DurationDays,
+			"max_devices":      license.MaxDevices,
+			"unbind_limit":     license.UnbindLimit,
+			"unbind_used":      license.UnbindUsed,
+			"unbind_remaining": license.RemainingClientUnbindCount(),
+			"status":           license.Status,
+			"created_at":       license.CreatedAt,
 		})
 	}
 
@@ -167,17 +179,20 @@ func (h *LicenseHandler) List(c *gin.Context) {
 	var result []gin.H
 	for _, license := range licenses {
 		item := gin.H{
-			"id":             license.ID,
-			"license_key":    license.LicenseKey,
-			"app_id":         license.AppID,
-			"license_type":   license.Type,
-			"duration_days":  license.DurationDays,
-			"max_devices":    license.MaxDevices,
-			"status":         license.Status,
-			"activated_at":   license.ActivatedAt,
-			"expires_at":     license.ExpireAt,
-			"remaining_days": license.RemainingDays(),
-			"created_at":     license.CreatedAt,
+			"id":               license.ID,
+			"license_key":      license.LicenseKey,
+			"app_id":           license.AppID,
+			"license_type":     license.Type,
+			"duration_days":    license.DurationDays,
+			"max_devices":      license.MaxDevices,
+			"unbind_limit":     license.UnbindLimit,
+			"unbind_used":      license.UnbindUsed,
+			"unbind_remaining": license.RemainingClientUnbindCount(),
+			"status":           license.Status,
+			"activated_at":     license.ActivatedAt,
+			"expires_at":       license.ExpireAt,
+			"remaining_days":   license.RemainingDays(),
+			"created_at":       license.CreatedAt,
 		}
 		if license.Application != nil {
 			item["app_name"] = license.Application.Name
@@ -205,23 +220,26 @@ func (h *LicenseHandler) Get(c *gin.Context) {
 	}
 
 	result := gin.H{
-		"id":              license.ID,
-		"license_key":     license.LicenseKey,
-		"app_id":          license.AppID,
-		"customer_id":     license.CustomerID,
-		"license_type":    license.Type,
-		"duration_days":   license.DurationDays,
-		"max_devices":     license.MaxDevices,
-		"features":        license.Features,
-		"status":          license.Status,
-		"activated_at":    license.ActivatedAt,
-		"expires_at":      license.ExpireAt,
-		"grace_expire_at": license.GraceExpireAt,
-		"remaining_days":  license.RemainingDays(),
-		"notes":           license.Notes,
-		"used_devices":    len(license.Devices),
-		"devices":         license.Devices,
-		"created_at":      license.CreatedAt,
+		"id":               license.ID,
+		"license_key":      license.LicenseKey,
+		"app_id":           license.AppID,
+		"customer_id":      license.CustomerID,
+		"license_type":     license.Type,
+		"duration_days":    license.DurationDays,
+		"max_devices":      license.MaxDevices,
+		"unbind_limit":     license.UnbindLimit,
+		"unbind_used":      license.UnbindUsed,
+		"unbind_remaining": license.RemainingClientUnbindCount(),
+		"features":         license.Features,
+		"status":           license.Status,
+		"activated_at":     license.ActivatedAt,
+		"expires_at":       license.ExpireAt,
+		"grace_expire_at":  license.GraceExpireAt,
+		"remaining_days":   license.RemainingDays(),
+		"notes":            license.Notes,
+		"used_devices":     len(license.Devices),
+		"devices":          license.Devices,
+		"created_at":       license.CreatedAt,
 	}
 
 	if license.Application != nil {
@@ -439,9 +457,10 @@ func (h *LicenseHandler) Resume(c *gin.Context) {
 
 // UpdateLicenseRequest 更新授权请求
 type UpdateLicenseRequest struct {
-	MaxDevices int    `json:"max_devices"`
-	Notes      string `json:"notes"`
-	Features   string `json:"features"`
+	MaxDevices  int    `json:"max_devices"`
+	UnbindLimit *int   `json:"unbind_limit"`
+	Notes       string `json:"notes"`
+	Features    string `json:"features"`
 }
 
 // Update 更新授权
@@ -466,6 +485,13 @@ func (h *LicenseHandler) Update(c *gin.Context) {
 	if req.MaxDevices > 0 {
 		updates["max_devices"] = req.MaxDevices
 	}
+	if req.UnbindLimit != nil {
+		if *req.UnbindLimit < 0 {
+			response.BadRequest(c, "解绑次数上限不能小于0")
+			return
+		}
+		updates["unbind_limit"] = *req.UnbindLimit
+	}
 	if req.Notes != "" {
 		updates["notes"] = req.Notes
 	}
@@ -481,6 +507,29 @@ func (h *LicenseHandler) Update(c *gin.Context) {
 	}
 
 	response.SuccessWithMessage(c, "更新成功", nil)
+}
+
+// ResetUnbindCount 重置客户端解绑计数
+func (h *LicenseHandler) ResetUnbindCount(c *gin.Context) {
+	id := c.Param("id")
+	tenantID := middleware.GetTenantID(c)
+
+	var license model.License
+	if err := model.DB.First(&license, "id = ? AND tenant_id = ?", id, tenantID).Error; err != nil {
+		response.NotFound(c, "授权不存在")
+		return
+	}
+
+	if err := model.DB.Model(&license).Update("unbind_used", 0).Error; err != nil {
+		response.ServerError(c, "重置解绑次数失败")
+		return
+	}
+
+	response.SuccessWithMessage(c, "解绑次数已重置", gin.H{
+		"unbind_limit":     license.UnbindLimit,
+		"unbind_used":      0,
+		"unbind_remaining": license.UnbindLimit,
+	})
 }
 
 // Delete 删除授权

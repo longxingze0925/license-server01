@@ -89,11 +89,20 @@ func SetupRouter(r *gin.Engine) {
 			clientAuth.POST("/deactivate", clientHandler.Deactivate)
 			clientAuth.POST("/register", clientHandler.ClientRegister)
 			clientAuth.POST("/login", clientHandler.ClientLogin)
+			clientAuth.POST("/refresh", clientHandler.ClientRefresh)
 		}
 
 		// 验证接口（中等限制）
 		client.POST("/auth/verify", clientHandler.Verify)
 		client.POST("/subscription/verify", clientHandler.SubscriptionVerify)
+
+		// 客户端会话保护接口
+		clientProtected := client.Group("")
+		clientProtected.Use(middleware.ClientAuthMiddleware())
+		{
+			clientProtected.POST("/auth/logout", clientHandler.ClientLogout)
+			clientProtected.DELETE("/devices/self", clientHandler.UnbindCurrentDevice)
+		}
 
 		// 心跳接口（较宽松限制）
 		heartbeat := client.Group("")
@@ -339,6 +348,7 @@ func SetupRouter(r *gin.Engine) {
 			licenses.POST("/:id/suspend", middleware.PermissionMiddleware("license:update"), licenseHandler.Suspend)
 			licenses.POST("/:id/resume", middleware.PermissionMiddleware("license:update"), licenseHandler.Resume)
 			licenses.POST("/:id/reset-devices", middleware.PermissionMiddleware("license:update"), licenseHandler.ResetDevices)
+			licenses.POST("/:id/reset-unbind-count", middleware.PermissionMiddleware("license:update"), licenseHandler.ResetUnbindCount)
 		}
 
 		// 订阅管理
@@ -352,6 +362,7 @@ func SetupRouter(r *gin.Engine) {
 			subscriptions.DELETE("/:id", middleware.PermissionMiddleware("subscription:delete"), subscriptionHandler.Delete)
 			subscriptions.POST("/:id/renew", middleware.PermissionMiddleware("subscription:update"), subscriptionHandler.Renew)
 			subscriptions.POST("/:id/cancel", middleware.PermissionMiddleware("subscription:update"), subscriptionHandler.Cancel)
+			subscriptions.POST("/:id/reset-unbind-count", middleware.PermissionMiddleware("subscription:update"), subscriptionHandler.ResetUnbindCount)
 		}
 
 		// 设备管理

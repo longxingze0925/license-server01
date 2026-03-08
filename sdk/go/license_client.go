@@ -93,19 +93,29 @@ var ErrCacheExpired = errors.New("缓存已过期，需要重新验证")
 
 // LicenseInfo 授权信息
 type LicenseInfo struct {
-	Valid          bool     `json:"valid"`
-	LicenseID      string   `json:"license_id,omitempty"`
-	SubscriptionID string   `json:"subscription_id,omitempty"`
-	DeviceID       string   `json:"device_id"`
-	Type           string   `json:"type,omitempty"`
-	PlanType       string   `json:"plan_type,omitempty"`
-	ExpireAt       *string  `json:"expire_at,omitempty"`
-	RemainingDays  int      `json:"remaining_days"`
-	Features       []string `json:"features"`
-	Signature      string   `json:"signature,omitempty"`
-	LicenseKey     string   `json:"license_key,omitempty"`
-	Email          string   `json:"email,omitempty"`
-	LastVerifiedAt int64    `json:"last_verified_at,omitempty"`
+	Valid            bool     `json:"valid"`
+	LicenseID        string   `json:"license_id,omitempty"`
+	SubscriptionID   string   `json:"subscription_id,omitempty"`
+	CustomerID       string   `json:"customer_id,omitempty"`
+	DeviceID         string   `json:"device_id"`
+	Type             string   `json:"type,omitempty"`
+	PlanType         string   `json:"plan_type,omitempty"`
+	ExpireAt         *string  `json:"expire_at,omitempty"`
+	RemainingDays    int      `json:"remaining_days"`
+	Features         []string `json:"features"`
+	Signature        string   `json:"signature,omitempty"`
+	LicenseKey       string   `json:"license_key,omitempty"`
+	Email            string   `json:"email,omitempty"`
+	LastVerifiedAt   int64    `json:"last_verified_at,omitempty"`
+	AccessToken      string   `json:"access_token,omitempty"`
+	RefreshToken     string   `json:"refresh_token,omitempty"`
+	TokenType        string   `json:"token_type,omitempty"`
+	ExpiresIn        int      `json:"expires_in,omitempty"`
+	RefreshExpiresIn int      `json:"refresh_expires_in,omitempty"`
+	AccessExpiresAt  int64    `json:"access_expires_at,omitempty"`
+	RefreshExpiresAt int64    `json:"refresh_expires_at,omitempty"`
+	SessionID        string   `json:"session_id,omitempty"`
+	AuthMode         string   `json:"auth_mode,omitempty"`
 }
 
 // DeviceInfo 设备信息
@@ -786,6 +796,9 @@ func (c *Client) verifyCachedLicenseSignature(info *LicenseInfo) error {
 	if info.SubscriptionID != "" {
 		dataMap["subscription_id"] = info.SubscriptionID
 	}
+	if info.CustomerID != "" {
+		dataMap["customer_id"] = info.CustomerID
+	}
 	if info.Type != "" {
 		dataMap["type"] = info.Type
 	}
@@ -794,6 +807,35 @@ func (c *Client) verifyCachedLicenseSignature(info *LicenseInfo) error {
 	}
 	if info.ExpireAt != nil {
 		dataMap["expire_at"] = *info.ExpireAt
+	} else {
+		dataMap["expire_at"] = nil
+	}
+	if info.AccessToken != "" {
+		dataMap["access_token"] = info.AccessToken
+	}
+	if info.RefreshToken != "" {
+		dataMap["refresh_token"] = info.RefreshToken
+	}
+	if info.TokenType != "" {
+		dataMap["token_type"] = info.TokenType
+	}
+	if info.ExpiresIn > 0 {
+		dataMap["expires_in"] = info.ExpiresIn
+	}
+	if info.RefreshExpiresIn > 0 {
+		dataMap["refresh_expires_in"] = info.RefreshExpiresIn
+	}
+	if info.AccessExpiresAt > 0 {
+		dataMap["access_expires_at"] = info.AccessExpiresAt
+	}
+	if info.RefreshExpiresAt > 0 {
+		dataMap["refresh_expires_at"] = info.RefreshExpiresAt
+	}
+	if info.SessionID != "" {
+		dataMap["session_id"] = info.SessionID
+	}
+	if info.AuthMode != "" {
+		dataMap["auth_mode"] = info.AuthMode
 	}
 
 	return c.verifyResponseSignature(dataMap, info.Signature)
@@ -832,6 +874,10 @@ func (c *Client) clearCache() {
 
 // request 发送 HTTP 请求
 func (c *Client) request(method, endpoint string, data interface{}) (map[string]interface{}, error) {
+	return c.requestWithHeaders(method, endpoint, data, nil)
+}
+
+func (c *Client) requestWithHeaders(method, endpoint string, data interface{}, headers map[string]string) (map[string]interface{}, error) {
 	url := c.serverURL + "/api/client" + endpoint
 
 	var body io.Reader
@@ -847,7 +893,14 @@ func (c *Client) request(method, endpoint string, data interface{}) (map[string]
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if data != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range headers {
+		if k != "" && v != "" {
+			req.Header.Set(k, v)
+		}
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -1121,8 +1174,121 @@ func (c *Client) SubscriptionVerify() bool {
 	return false
 }
 
-// Deactivate 解绑设备
-func (c *Client) Deactivate() bool {
+func (c *Client) getSessionSnapshot() (accessToken, refreshToken, authMode, email string) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.licenseInfo == nil {
+		return "", "", "", ""
+	}
+	return c.licenseInfo.AccessToken, c.licenseInfo.RefreshToken, c.licenseInfo.AuthMode, c.licenseInfo.Email
+}
+
+func (c *Client) refreshClientSession() bool {
+	_, refreshToken, _, _ := c.getSessionSnapshot()
+	if refreshToken == "" {
+		return false
+	}
+
+	result, err := c.request("POST", "/auth/refresh", map[string]interface{}{
+		"refresh_token": refreshToken,
+	})
+	if err != nil {
+		return false
+	}
+
+	accessToken, _ := result["access_token"].(string)
+	if accessToken == "" {
+		return false
+	}
+
+	c.mu.Lock()
+	if c.licenseInfo == nil {
+		c.mu.Unlock()
+		return false
+	}
+	c.licenseInfo.AccessToken = accessToken
+	if v, ok := result["refresh_token"].(string); ok && v != "" {
+		c.licenseInfo.RefreshToken = v
+	}
+	if v, ok := result["token_type"].(string); ok && v != "" {
+		c.licenseInfo.TokenType = v
+	}
+	if v, ok := result["session_id"].(string); ok && v != "" {
+		c.licenseInfo.SessionID = v
+	}
+	if v, ok := result["auth_mode"].(string); ok && v != "" {
+		c.licenseInfo.AuthMode = v
+	}
+	if v, ok := result["expires_in"].(float64); ok {
+		c.licenseInfo.ExpiresIn = int(v)
+	}
+	if v, ok := result["refresh_expires_in"].(float64); ok {
+		c.licenseInfo.RefreshExpiresIn = int(v)
+	}
+	if v, ok := result["access_expires_at"].(float64); ok {
+		c.licenseInfo.AccessExpiresAt = int64(v)
+	}
+	if v, ok := result["refresh_expires_at"].(float64); ok {
+		c.licenseInfo.RefreshExpiresAt = int64(v)
+	}
+	c.mu.Unlock()
+
+	c.saveCache()
+	return true
+}
+
+func shouldRetryWithRefresh(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "客户端令牌") ||
+		strings.Contains(msg, "会话") ||
+		strings.Contains(msg, "认证")
+}
+
+// Deactivate 解绑设备。
+// 订阅模式请传入密码：Deactivate("your_password")。
+func (c *Client) Deactivate(password ...string) bool {
+	accessToken, _, authMode, email := c.getSessionSnapshot()
+	if accessToken != "" {
+		mode := strings.ToLower(strings.TrimSpace(authMode))
+		body := map[string]interface{}{}
+		if mode == "subscription" {
+			pass := ""
+			if len(password) > 0 {
+				pass = strings.TrimSpace(password[0])
+			}
+			if pass == "" {
+				return false
+			}
+			if email != "" {
+				body["password"] = c.hashPassword(pass, email)
+				body["password_hashed"] = true
+			} else {
+				body["password"] = pass
+			}
+		}
+
+		headers := map[string]string{"Authorization": "Bearer " + accessToken}
+		_, err := c.requestWithHeaders("DELETE", "/devices/self", body, headers)
+		if err != nil && shouldRetryWithRefresh(err) && c.refreshClientSession() {
+			accessToken, _, _, _ = c.getSessionSnapshot()
+			if accessToken != "" {
+				headers["Authorization"] = "Bearer " + accessToken
+				_, err = c.requestWithHeaders("DELETE", "/devices/self", body, headers)
+			}
+		}
+		if err == nil {
+			c.clearCache()
+			c.StopHeartbeat()
+			return true
+		}
+		if mode == "subscription" {
+			return false
+		}
+	}
+
 	data := map[string]interface{}{
 		"app_key":    c.appKey,
 		"machine_id": c.machineID,
@@ -1364,6 +1530,9 @@ func (c *Client) parseResult(result map[string]interface{}) *LicenseInfo {
 	if v, ok := result["subscription_id"].(string); ok {
 		info.SubscriptionID = v
 	}
+	if v, ok := result["customer_id"].(string); ok {
+		info.CustomerID = v
+	}
 	if v, ok := result["device_id"].(string); ok {
 		info.DeviceID = v
 	}
@@ -1373,8 +1542,12 @@ func (c *Client) parseResult(result map[string]interface{}) *LicenseInfo {
 	if v, ok := result["plan_type"].(string); ok {
 		info.PlanType = v
 	}
-	if v, ok := result["expire_at"].(string); ok {
-		info.ExpireAt = &v
+	if raw, exists := result["expire_at"]; exists {
+		if raw == nil {
+			info.ExpireAt = nil
+		} else if v, ok := raw.(string); ok {
+			info.ExpireAt = &v
+		}
 	}
 	if v, ok := result["remaining_days"].(float64); ok {
 		info.RemainingDays = int(v)
@@ -1388,6 +1561,33 @@ func (c *Client) parseResult(result map[string]interface{}) *LicenseInfo {
 	}
 	if v, ok := result["signature"].(string); ok {
 		info.Signature = v
+	}
+	if v, ok := result["access_token"].(string); ok {
+		info.AccessToken = v
+	}
+	if v, ok := result["refresh_token"].(string); ok {
+		info.RefreshToken = v
+	}
+	if v, ok := result["token_type"].(string); ok {
+		info.TokenType = v
+	}
+	if v, ok := result["session_id"].(string); ok {
+		info.SessionID = v
+	}
+	if v, ok := result["auth_mode"].(string); ok {
+		info.AuthMode = v
+	}
+	if v, ok := result["expires_in"].(float64); ok {
+		info.ExpiresIn = int(v)
+	}
+	if v, ok := result["refresh_expires_in"].(float64); ok {
+		info.RefreshExpiresIn = int(v)
+	}
+	if v, ok := result["access_expires_at"].(float64); ok {
+		info.AccessExpiresAt = int64(v)
+	}
+	if v, ok := result["refresh_expires_at"].(float64); ok {
+		info.RefreshExpiresAt = int64(v)
 	}
 
 	return info

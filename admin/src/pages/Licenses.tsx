@@ -133,6 +133,7 @@ const Licenses: React.FC = () => {
         customer_id: values.customer_id,
         type: 'subscription', // 默认使用订阅类型
         max_devices: values.max_devices,
+        unbind_limit: values.unbind_limit,
         duration_days: values.duration_days,
         features: values.features || [],
         notes: values.remark,
@@ -175,6 +176,22 @@ const Licenses: React.FC = () => {
         try {
           await licenseApi.resetDevices(record.id);
           message.success('设备已重置');
+          fetchData(pagination.current, pagination.pageSize);
+        } catch (error) {
+          console.error(error);
+        }
+      },
+    });
+  };
+
+  const handleResetUnbindCount = (record: any) => {
+    modal.confirm({
+      title: '重置解绑次数',
+      content: '确定要重置该授权的客户端解绑次数吗？',
+      onOk: async () => {
+        try {
+          await licenseApi.resetUnbindCount(record.id);
+          message.success('解绑次数已重置');
           fetchData(pagination.current, pagination.pageSize);
         } catch (error) {
           console.error(error);
@@ -229,6 +246,11 @@ const Licenses: React.FC = () => {
     { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => getStatusTag(s) },
     { title: '设备数', dataIndex: 'max_devices', key: 'max_devices' },
     {
+      title: '解绑剩余',
+      key: 'unbind_remaining',
+      render: (_: any, record: any) => `${record.unbind_remaining ?? 0}/${record.unbind_limit ?? 0}`,
+    },
+    {
       title: '过期时间',
       dataIndex: 'expires_at',
       key: 'expires_at',
@@ -241,6 +263,7 @@ const Licenses: React.FC = () => {
         <Space>
           <Button type="link" size="small" onClick={() => handleView(record)}>详情</Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+          <Button type="link" size="small" onClick={() => handleResetUnbindCount(record)}>重置解绑</Button>
           <Button type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleReset(record)}>重置</Button>
           {record.status === 'active' && (
             <Button type="link" size="small" danger icon={<StopOutlined />} onClick={() => handleRevoke(record)}>吊销</Button>
@@ -315,6 +338,15 @@ const Licenses: React.FC = () => {
           <Form.Item name="max_devices" label="最大设备数" initialValue={1}>
             <InputNumber min={1} max={100} style={{ width: '100%' }} />
           </Form.Item>
+          <Form.Item
+            name="unbind_limit"
+            label="终身解绑总次数"
+            initialValue={5}
+            rules={[{ required: true, message: '请输入终身解绑总次数' }]}
+            extra="客户端累计解绑总上限，超限后只能管理员后台解绑"
+          >
+            <InputNumber min={0} max={1000} style={{ width: '100%' }} />
+          </Form.Item>
           <Form.Item name="duration_days" label="有效天数" initialValue={365} rules={[{ required: true, message: '请输入有效天数' }]} extra="-1表示永久有效">
             <InputNumber min={-1} style={{ width: '100%' }} />
           </Form.Item>
@@ -360,6 +392,9 @@ const Licenses: React.FC = () => {
             <Descriptions.Item label="状态">{getStatusTag(currentLicense.status)}</Descriptions.Item>
             <Descriptions.Item label="最大设备数">{currentLicense.max_devices}</Descriptions.Item>
             <Descriptions.Item label="已用设备数">{currentLicense.used_devices || 0}</Descriptions.Item>
+            <Descriptions.Item label="终身解绑总次数">{currentLicense.unbind_limit ?? 0}</Descriptions.Item>
+            <Descriptions.Item label="已用解绑次数">{currentLicense.unbind_used ?? 0}</Descriptions.Item>
+            <Descriptions.Item label="剩余解绑次数">{currentLicense.unbind_remaining ?? 0}</Descriptions.Item>
             <Descriptions.Item label="有效天数">
               {currentLicense.duration_days === -1 ? '永久' : `${currentLicense.duration_days} 天`}
             </Descriptions.Item>

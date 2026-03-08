@@ -126,6 +126,11 @@ type SecurityConfig struct {
 	// 客户端下载令牌
 	DownloadTokenSecret        string `yaml:"download_token_secret"`         // 下载 token 密钥（留空复用 JWT Secret）
 	DownloadTokenExpireSeconds int    `yaml:"download_token_expire_seconds"` // 下载 token 过期时间（秒）
+
+	// 客户端会话令牌
+	ClientAccessTokenSecret         string `yaml:"client_access_token_secret"`          // 客户端 access token 密钥（留空复用 JWT Secret）
+	ClientAccessTokenExpireSeconds  int    `yaml:"client_access_token_expire_seconds"`  // 客户端 access token 过期时间（秒）
+	ClientRefreshTokenExpireSeconds int    `yaml:"client_refresh_token_expire_seconds"` // 客户端 refresh token 过期时间（秒）
 }
 
 var globalConfig *Config
@@ -198,6 +203,12 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Security.DownloadTokenExpireSeconds == 0 {
 		cfg.Security.DownloadTokenExpireSeconds = 300
+	}
+	if cfg.Security.ClientAccessTokenExpireSeconds == 0 {
+		cfg.Security.ClientAccessTokenExpireSeconds = 900
+	}
+	if cfg.Security.ClientRefreshTokenExpireSeconds == 0 {
+		cfg.Security.ClientRefreshTokenExpireSeconds = 2592000
 	}
 }
 

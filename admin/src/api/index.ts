@@ -75,6 +75,7 @@ export const licenseApi = {
   suspend: (id: string, data?: { reason?: string }) => request.post(`/admin/licenses/${id}/suspend`, data),
   resume: (id: string) => request.post(`/admin/licenses/${id}/resume`),
   resetDevices: (id: string) => request.post(`/admin/licenses/${id}/reset-devices`),
+  resetUnbindCount: (id: string) => request.post(`/admin/licenses/${id}/reset-unbind-count`),
 };
 
 // 订阅管理（账号密码模式）
@@ -86,6 +87,7 @@ export const subscriptionApi = {
   delete: (id: string) => request.delete(`/admin/subscriptions/${id}`),
   renew: (id: string, data: { days: number }) => request.post(`/admin/subscriptions/${id}/renew`, data),
   cancel: (id: string) => request.post(`/admin/subscriptions/${id}/cancel`),
+  resetUnbindCount: (id: string) => request.post(`/admin/subscriptions/${id}/reset-unbind-count`),
 };
 
 // 设备管理

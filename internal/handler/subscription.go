@@ -19,13 +19,14 @@ func NewSubscriptionHandler() *SubscriptionHandler {
 
 // CreateSubscriptionRequest 创建订阅请求
 type CreateSubscriptionRequest struct {
-	CustomerID string   `json:"customer_id" binding:"required"`
-	AppID      string   `json:"app_id" binding:"required"`
-	PlanType   string   `json:"plan_type"` // 可选，默认 basic
-	MaxDevices int      `json:"max_devices"`
-	Features   []string `json:"features"`
-	Days       int      `json:"days"` // 有效天数，-1表示永久
-	Notes      string   `json:"notes"`
+	CustomerID  string   `json:"customer_id" binding:"required"`
+	AppID       string   `json:"app_id" binding:"required"`
+	PlanType    string   `json:"plan_type"` // 可选，默认 basic
+	MaxDevices  int      `json:"max_devices"`
+	UnbindLimit int      `json:"unbind_limit"`
+	Features    []string `json:"features"`
+	Days        int      `json:"days"` // 有效天数，-1表示永久
+	Notes       string   `json:"notes"`
 }
 
 // Create 创建订阅
@@ -66,6 +67,13 @@ func (h *SubscriptionHandler) Create(c *gin.Context) {
 	if req.PlanType == "" {
 		req.PlanType = "basic"
 	}
+	if req.UnbindLimit < 0 {
+		response.BadRequest(c, "解绑次数上限不能小于0")
+		return
+	}
+	if req.UnbindLimit == 0 {
+		req.UnbindLimit = 5
+	}
 
 	// 序列化 features
 	featuresJSON := "[]"
@@ -76,15 +84,16 @@ func (h *SubscriptionHandler) Create(c *gin.Context) {
 
 	now := time.Now()
 	subscription := model.Subscription{
-		TenantID:   tenantID,
-		CustomerID: req.CustomerID,
-		AppID:      req.AppID,
-		PlanType:   model.PlanType(req.PlanType),
-		MaxDevices: req.MaxDevices,
-		Features:   featuresJSON,
-		Status:     model.SubscriptionStatusActive,
-		StartAt:    &now,
-		Notes:      req.Notes,
+		TenantID:    tenantID,
+		CustomerID:  req.CustomerID,
+		AppID:       req.AppID,
+		PlanType:    model.PlanType(req.PlanType),
+		MaxDevices:  req.MaxDevices,
+		UnbindLimit: req.UnbindLimit,
+		Features:    featuresJSON,
+		Status:      model.SubscriptionStatusActive,
+		StartAt:     &now,
+		Notes:       req.Notes,
 	}
 
 	// 设置过期时间
@@ -99,14 +108,17 @@ func (h *SubscriptionHandler) Create(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"id":          subscription.ID,
-		"tenant_id":   subscription.TenantID,
-		"customer_id": subscription.CustomerID,
-		"app_id":      subscription.AppID,
-		"plan_type":   subscription.PlanType,
-		"status":      subscription.Status,
-		"expire_at":   subscription.ExpireAt,
-		"created_at":  subscription.CreatedAt,
+		"id":               subscription.ID,
+		"tenant_id":        subscription.TenantID,
+		"customer_id":      subscription.CustomerID,
+		"app_id":           subscription.AppID,
+		"plan_type":        subscription.PlanType,
+		"status":           subscription.Status,
+		"unbind_limit":     subscription.UnbindLimit,
+		"unbind_used":      subscription.UnbindUsed,
+		"unbind_remaining": subscription.RemainingClientUnbindCount(),
+		"expire_at":        subscription.ExpireAt,
+		"created_at":       subscription.CreatedAt,
 	})
 }
 
@@ -151,16 +163,19 @@ func (h *SubscriptionHandler) List(c *gin.Context) {
 	var result []gin.H
 	for _, sub := range subscriptions {
 		item := gin.H{
-			"id":             sub.ID,
-			"customer_id":    sub.CustomerID,
-			"app_id":         sub.AppID,
-			"plan_type":      sub.PlanType,
-			"max_devices":    sub.MaxDevices,
-			"status":         sub.Status,
-			"start_at":       sub.StartAt,
-			"expire_at":      sub.ExpireAt,
-			"remaining_days": sub.RemainingDays(),
-			"created_at":     sub.CreatedAt,
+			"id":               sub.ID,
+			"customer_id":      sub.CustomerID,
+			"app_id":           sub.AppID,
+			"plan_type":        sub.PlanType,
+			"max_devices":      sub.MaxDevices,
+			"unbind_limit":     sub.UnbindLimit,
+			"unbind_used":      sub.UnbindUsed,
+			"unbind_remaining": sub.RemainingClientUnbindCount(),
+			"status":           sub.Status,
+			"start_at":         sub.StartAt,
+			"expire_at":        sub.ExpireAt,
+			"remaining_days":   sub.RemainingDays(),
+			"created_at":       sub.CreatedAt,
 		}
 		if sub.Customer != nil {
 			item["customer_email"] = sub.Customer.Email
@@ -194,32 +209,36 @@ func (h *SubscriptionHandler) Get(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"id":             subscription.ID,
-		"customer_id":    subscription.CustomerID,
-		"app_id":         subscription.AppID,
-		"plan_type":      subscription.PlanType,
-		"max_devices":    subscription.MaxDevices,
-		"features":       features,
-		"status":         subscription.Status,
-		"start_at":       subscription.StartAt,
-		"expire_at":      subscription.ExpireAt,
-		"remaining_days": subscription.RemainingDays(),
-		"auto_renew":     subscription.AutoRenew,
-		"notes":          subscription.Notes,
-		"customer":       subscription.Customer,
-		"application":    subscription.Application,
-		"devices":        subscription.Devices,
-		"created_at":     subscription.CreatedAt,
+		"id":               subscription.ID,
+		"customer_id":      subscription.CustomerID,
+		"app_id":           subscription.AppID,
+		"plan_type":        subscription.PlanType,
+		"max_devices":      subscription.MaxDevices,
+		"unbind_limit":     subscription.UnbindLimit,
+		"unbind_used":      subscription.UnbindUsed,
+		"unbind_remaining": subscription.RemainingClientUnbindCount(),
+		"features":         features,
+		"status":           subscription.Status,
+		"start_at":         subscription.StartAt,
+		"expire_at":        subscription.ExpireAt,
+		"remaining_days":   subscription.RemainingDays(),
+		"auto_renew":       subscription.AutoRenew,
+		"notes":            subscription.Notes,
+		"customer":         subscription.Customer,
+		"application":      subscription.Application,
+		"devices":          subscription.Devices,
+		"created_at":       subscription.CreatedAt,
 	})
 }
 
 // UpdateSubscriptionRequest 更新订阅请求
 type UpdateSubscriptionRequest struct {
-	PlanType   string   `json:"plan_type"`
-	MaxDevices int      `json:"max_devices"`
-	Features   []string `json:"features"`
-	Status     string   `json:"status"`
-	Notes      string   `json:"notes"`
+	PlanType    string   `json:"plan_type"`
+	MaxDevices  int      `json:"max_devices"`
+	UnbindLimit *int     `json:"unbind_limit"`
+	Features    []string `json:"features"`
+	Status      string   `json:"status"`
+	Notes       string   `json:"notes"`
 }
 
 // Update 更新订阅
@@ -246,6 +265,13 @@ func (h *SubscriptionHandler) Update(c *gin.Context) {
 	if req.MaxDevices > 0 {
 		updates["max_devices"] = req.MaxDevices
 	}
+	if req.UnbindLimit != nil {
+		if *req.UnbindLimit < 0 {
+			response.BadRequest(c, "解绑次数上限不能小于0")
+			return
+		}
+		updates["unbind_limit"] = *req.UnbindLimit
+	}
 	if req.Features != nil {
 		featuresJSON, _ := json.Marshal(req.Features)
 		updates["features"] = string(featuresJSON)
@@ -263,6 +289,29 @@ func (h *SubscriptionHandler) Update(c *gin.Context) {
 	}
 
 	response.SuccessWithMessage(c, "更新成功", nil)
+}
+
+// ResetUnbindCount 重置客户端解绑计数
+func (h *SubscriptionHandler) ResetUnbindCount(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+	id := c.Param("id")
+
+	var subscription model.Subscription
+	if err := model.DB.Where("id = ? AND tenant_id = ?", id, tenantID).First(&subscription).Error; err != nil {
+		response.NotFound(c, "订阅不存在")
+		return
+	}
+
+	if err := model.DB.Model(&subscription).Update("unbind_used", 0).Error; err != nil {
+		response.ServerError(c, "重置解绑次数失败")
+		return
+	}
+
+	response.SuccessWithMessage(c, "解绑次数已重置", gin.H{
+		"unbind_limit":     subscription.UnbindLimit,
+		"unbind_used":      0,
+		"unbind_remaining": subscription.UnbindLimit,
+	})
 }
 
 // Renew 续费订阅

@@ -11,6 +11,7 @@ import (
 
 // TestIntegration_DataSync_GetTableList 测试获取表列表
 func TestIntegration_DataSync_GetTableList(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 获取表列表 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -49,6 +50,7 @@ func TestIntegration_DataSync_GetTableList(t *testing.T) {
 
 // TestIntegration_DataSync_PushAndPullRecord 测试推送和拉取记录
 func TestIntegration_DataSync_PushAndPullRecord(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 推送和拉取记录 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -103,6 +105,7 @@ func TestIntegration_DataSync_PushAndPullRecord(t *testing.T) {
 
 // TestIntegration_DataSync_BatchPush 测试批量推送
 func TestIntegration_DataSync_BatchPush(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 批量推送 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -158,6 +161,7 @@ func TestIntegration_DataSync_BatchPush(t *testing.T) {
 
 // TestIntegration_DataSync_DeleteRecord 测试删除记录
 func TestIntegration_DataSync_DeleteRecord(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 删除记录 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -203,6 +207,7 @@ func TestIntegration_DataSync_DeleteRecord(t *testing.T) {
 
 // TestIntegration_DataSync_SyncTime 测试同步时间管理
 func TestIntegration_DataSync_SyncTime(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 同步时间管理 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -233,6 +238,7 @@ func TestIntegration_DataSync_SyncTime(t *testing.T) {
 
 // TestIntegration_DataSync_IncrementalSync 测试增量同步
 func TestIntegration_DataSync_IncrementalSync(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 增量同步 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -284,6 +290,7 @@ func TestIntegration_DataSync_IncrementalSync(t *testing.T) {
 
 // TestIntegration_DataSync_SyncTableFromServer 测试便捷同步方法
 func TestIntegration_DataSync_SyncTableFromServer(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 便捷同步方法 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -321,6 +328,7 @@ func TestIntegration_DataSync_SyncTableFromServer(t *testing.T) {
 
 // TestIntegration_DataSync_GetSyncStatus 测试获取同步状态
 func TestIntegration_DataSync_GetSyncStatus(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 获取同步状态 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -357,6 +365,7 @@ func TestIntegration_DataSync_GetSyncStatus(t *testing.T) {
 
 // TestIntegration_DataSync_PushAndGetChanges 测试推送和获取变更
 func TestIntegration_DataSync_PushAndGetChanges(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 推送和获取变更 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -410,6 +419,7 @@ func TestIntegration_DataSync_PushAndGetChanges(t *testing.T) {
 
 // TestIntegration_DataSync_AutoSyncManager 测试自动同步管理器
 func TestIntegration_DataSync_AutoSyncManager(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 自动同步管理器 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -470,6 +480,7 @@ func TestIntegration_DataSync_AutoSyncManager(t *testing.T) {
 
 // TestIntegration_DataSync_Configs 测试配置数据同步
 func TestIntegration_DataSync_Configs(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 配置数据 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -519,6 +530,7 @@ func TestIntegration_DataSync_Configs(t *testing.T) {
 
 // TestIntegration_DataSync_Workflows 测试工作流数据同步
 func TestIntegration_DataSync_Workflows(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 工作流数据 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -580,6 +592,7 @@ func TestIntegration_DataSync_Workflows(t *testing.T) {
 
 // TestIntegration_DataSync_Materials 测试素材数据同步
 func TestIntegration_DataSync_Materials(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 素材数据 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -631,6 +644,7 @@ func TestIntegration_DataSync_Materials(t *testing.T) {
 
 // TestIntegration_DataSync_Posts 测试帖子数据同步
 func TestIntegration_DataSync_Posts(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 帖子数据 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -704,6 +718,7 @@ func TestIntegration_DataSync_Posts(t *testing.T) {
 
 // TestIntegration_DataSync_CommentScripts 测试评论话术同步
 func TestIntegration_DataSync_CommentScripts(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 评论话术 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
@@ -754,6 +769,7 @@ func TestIntegration_DataSync_CommentScripts(t *testing.T) {
 
 // TestIntegration_DataSync_FullWorkflow 测试完整数据同步工作流
 func TestIntegration_DataSync_FullWorkflow(t *testing.T) {
+	requireIntegrationServer(t)
 	fmt.Println("\n========== 集成测试: 数据同步 - 完整工作流 ==========")
 
 	client := NewClient(IntegrationServerURL, IntegrationAppKey,
