@@ -288,6 +288,10 @@ func (h *HotUpdateHandler) List(c *gin.Context) {
 
 	var hotUpdates []model.HotUpdate
 	query := model.DB.Where("app_id = ?", appID).Order("created_at DESC")
+	status := c.Query("status")
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
 
 	// 分页
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -387,9 +391,9 @@ func (h *HotUpdateHandler) Update(c *gin.Context) {
 	}
 
 	var req struct {
-		Changelog         string `json:"changelog"`
+		Changelog         *string `json:"changelog"`
 		ForceUpdate       *bool  `json:"force_update"`
-		MinAppVersion     string `json:"min_app_version"`
+		MinAppVersion     *string `json:"min_app_version"`
 		RolloutPercentage int    `json:"rollout_percentage"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -398,14 +402,14 @@ func (h *HotUpdateHandler) Update(c *gin.Context) {
 	}
 
 	updates := map[string]interface{}{}
-	if req.Changelog != "" {
-		updates["changelog"] = req.Changelog
+	if req.Changelog != nil {
+		updates["changelog"] = *req.Changelog
 	}
 	if req.ForceUpdate != nil {
 		updates["force_update"] = *req.ForceUpdate
 	}
-	if req.MinAppVersion != "" {
-		updates["min_app_version"] = req.MinAppVersion
+	if req.MinAppVersion != nil {
+		updates["min_app_version"] = *req.MinAppVersion
 	}
 	if req.RolloutPercentage > 0 && req.RolloutPercentage <= 100 {
 		updates["rollout_percentage"] = req.RolloutPercentage
@@ -531,6 +535,14 @@ func (h *HotUpdateHandler) GetLogs(c *gin.Context) {
 
 	var logs []model.HotUpdateLog
 	query := model.DB.Where("hot_update_id = ?", id).Order("created_at DESC")
+	status := c.Query("status")
+	hasError := c.Query("has_error")
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if hasError == "true" {
+		query = query.Where("error_message <> ''")
+	}
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))

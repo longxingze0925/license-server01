@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Tabs, Button, Descriptions, Tag, Input, message, Spin, Card, Table, Space, Modal, Form, InputNumber, Upload, Select, Progress, Switch, App } from 'antd';
+import { Tabs, Button, Descriptions, Tag, Input, message, Spin, Card, Table, Space, Modal, Form, InputNumber, Upload, Select, Progress, App, Checkbox } from 'antd';
 import { ArrowLeftOutlined, CopyOutlined, KeyOutlined, PlusOutlined, UploadOutlined, EditOutlined, CodeOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
 import { appApi, hotUpdateApi, secureScriptApi, instructionApi, publishTaskApi } from '../api';
 import dayjs from 'dayjs';
@@ -16,7 +16,7 @@ const AppDetail: React.FC = () => {
   const [app, setApp] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('info');
 
-  // 版本管理相关（合并了热更新）
+  // 热更新相关
   const [versions, setVersions] = useState<any[]>([]);
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionModalVisible, setVersionModalVisible] = useState(false);
@@ -25,6 +25,16 @@ const AppDetail: React.FC = () => {
   const [creatingVersion, setCreatingVersion] = useState(false);
   const [versionUploadPercent, setVersionUploadPercent] = useState(0);
   const [versionActionLoading, setVersionActionLoading] = useState<Record<string, boolean>>({});
+  const [versionStatusFilter, setVersionStatusFilter] = useState<string>('all');
+  const [versionDetailVisible, setVersionDetailVisible] = useState(false);
+  const [versionDetailLoading, setVersionDetailLoading] = useState(false);
+  const [savingVersionDetail, setSavingVersionDetail] = useState(false);
+  const [currentVersionDetail, setCurrentVersionDetail] = useState<any>(null);
+  const [versionLogs, setVersionLogs] = useState<any[]>([]);
+  const [versionLogsLoading, setVersionLogsLoading] = useState(false);
+  const [versionLogStatusFilter, setVersionLogStatusFilter] = useState<string>('all');
+  const [versionLogOnlyErrors, setVersionLogOnlyErrors] = useState(false);
+  const [versionDetailForm] = Form.useForm();
 
   // 安全脚本相关
   const [scripts, setScripts] = useState<any[]>([]);
@@ -52,7 +62,7 @@ const AppDetail: React.FC = () => {
       if (activeTab === 'scripts') fetchScripts();
       if (activeTab === 'instructions') fetchOnlineDevices();
     }
-  }, [activeTab, id, app]);
+  }, [activeTab, id, app, versionStatusFilter]);
 
   const fetchApp = async () => {
     setLoading(true);
@@ -88,11 +98,12 @@ const AppDetail: React.FC = () => {
     });
   };
 
-  // ==================== 版本管理（合并热更新） ====================
+  // ==================== 热更新管理 ====================
   const fetchVersions = async () => {
     setVersionLoading(true);
     try {
-      const result: any = await hotUpdateApi.list(id!);
+      const params = versionStatusFilter !== 'all' ? { status: versionStatusFilter } : undefined;
+      const result: any = await hotUpdateApi.list(id!, params);
       setVersions(result?.list ?? (Array.isArray(result) ? result : []));
     } catch (error) {
       console.error(error);
@@ -118,13 +129,12 @@ const AppDetail: React.FC = () => {
       const formData = new FormData();
       formData.append('file', versionFileList[0].originFileObj);
       formData.append('version', values.version);
-      formData.append('version_code', values.version_code.toString());
+      formData.append('version_code', '0');
       formData.append('update_type', values.update_type || 'full');
-      formData.append('update_mode', values.update_mode || 'mixed');
+      formData.append('update_mode', 'mixed');
       formData.append('changelog', values.changelog || '');
       formData.append('rollout_percentage', (values.rollout_percentage || 100).toString());
-      formData.append('force_update', values.force_update ? 'true' : 'false');
-      formData.append('restart_required', values.restart_required ? 'true' : 'false');
+      formData.append('force_update', 'false');
       if (values.min_app_version) {
         formData.append('min_app_version', values.min_app_version);
       }
@@ -228,6 +238,104 @@ const AppDetail: React.FC = () => {
         }
       },
     });
+  };
+
+  const fetchVersionLogs = async (
+    versionId: string,
+    status: string = versionLogStatusFilter,
+    onlyErrors: boolean = versionLogOnlyErrors,
+  ) => {
+    setVersionLogsLoading(true);
+    try {
+      const params: Record<string, string | number | boolean> = { page_size: 50 };
+      if (status && status !== 'all') {
+        params.status = status;
+      }
+      if (onlyErrors) {
+        params.has_error = true;
+      }
+      const logsResult: any = await hotUpdateApi.getLogs(versionId, params);
+      setVersionLogs(logsResult?.list ?? (Array.isArray(logsResult) ? logsResult : []));
+    } catch (error) {
+      console.error(error);
+      message.warning('热更新日志加载失败');
+      setVersionLogs([]);
+    } finally {
+      setVersionLogsLoading(false);
+    }
+  };
+
+  const handleViewVersion = async (versionId: string) => {
+    setVersionDetailVisible(true);
+    setVersionDetailLoading(true);
+    setVersionLogs([]);
+    setVersionLogStatusFilter('all');
+    setVersionLogOnlyErrors(false);
+    try {
+      const detail: any = await hotUpdateApi.get(versionId);
+      setCurrentVersionDetail(detail);
+      versionDetailForm.setFieldsValue({
+        changelog: detail?.changelog || '',
+        rollout_percentage: detail?.rollout_percentage || 100,
+        min_app_version: detail?.min_app_version || '',
+      });
+
+      await fetchVersionLogs(versionId, 'all', false);
+    } catch (error) {
+      console.error(error);
+      message.error('获取热更新详情失败');
+      setVersionDetailVisible(false);
+    } finally {
+      setVersionDetailLoading(false);
+    }
+  };
+
+  const handleVersionLogStatusChange = async (status: string) => {
+    setVersionLogStatusFilter(status);
+    if (!currentVersionDetail?.id) {
+      return;
+    }
+    await fetchVersionLogs(currentVersionDetail.id, status, versionLogOnlyErrors);
+  };
+
+  const handleVersionLogOnlyErrorsChange = async (event: any) => {
+    const checked = event.target.checked;
+    setVersionLogOnlyErrors(checked);
+    if (!currentVersionDetail?.id) {
+      return;
+    }
+    await fetchVersionLogs(currentVersionDetail.id, versionLogStatusFilter, checked);
+  };
+
+  const handleSaveVersionDetail = async () => {
+    if (!currentVersionDetail?.id || savingVersionDetail) {
+      return;
+    }
+
+    try {
+      const values = await versionDetailForm.validateFields();
+      setSavingVersionDetail(true);
+
+      await hotUpdateApi.update(currentVersionDetail.id, {
+        changelog: values.changelog || '',
+        rollout_percentage: values.rollout_percentage || 100,
+        min_app_version: values.min_app_version || '',
+      });
+
+      const detail: any = await hotUpdateApi.get(currentVersionDetail.id);
+      setCurrentVersionDetail(detail);
+      versionDetailForm.setFieldsValue({
+        changelog: detail?.changelog || '',
+        rollout_percentage: detail?.rollout_percentage || 100,
+        min_app_version: detail?.min_app_version || '',
+      });
+      message.success('保存成功');
+      fetchVersions();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setSavingVersionDetail(false);
+    }
   };
 
   const waitPublishTask = async (taskId: string, timeoutMs = 120000): Promise<any> => {
@@ -354,14 +462,17 @@ const AppDetail: React.FC = () => {
     return <Tag color={t.color}>{t.text}</Tag>;
   };
 
-  const getUpdateModeTag = (mode: string) => {
-    const map: Record<string, string> = {
-      exe: '程序更新',
-      script: '脚本更新',
-      resource: '资源更新',
-      mixed: '混合更新',
+  const getUpdateLogStatusTag = (status: string) => {
+    const map: Record<string, { color: string; text: string }> = {
+      pending: { color: 'default', text: '待处理' },
+      downloading: { color: 'processing', text: '下载中' },
+      installing: { color: 'blue', text: '安装中' },
+      success: { color: 'green', text: '成功' },
+      failed: { color: 'red', text: '失败' },
+      rollback: { color: 'orange', text: '已回滚' },
     };
-    return map[mode] || mode;
+    const current = map[status] || { color: 'default', text: status };
+    return <Tag color={current.color}>{current.text}</Tag>;
   };
 
   if (loading) {
@@ -409,11 +520,22 @@ const AppDetail: React.FC = () => {
     },
     {
       key: 'versions',
-      label: '版本管理',
+      label: '热更新管理',
       children: (
         <Card
-          title="版本列表"
-          extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => { versionForm.resetFields(); setVersionFileList([]); setVersionUploadPercent(0); setVersionModalVisible(true); }}>发布新版本</Button>}
+          title="热更新列表"
+          extra={(
+            <Space>
+              <Select value={versionStatusFilter} style={{ width: 150 }} onChange={setVersionStatusFilter}>
+                <Option value="all">全部状态</Option>
+                <Option value="draft">草稿</Option>
+                <Option value="published">已发布</Option>
+                <Option value="deprecated">已废弃</Option>
+                <Option value="rollback">已回滚</Option>
+              </Select>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => { versionForm.resetFields(); setVersionFileList([]); setVersionUploadPercent(0); setVersionModalVisible(true); }}>创建热更新</Button>
+            </Space>
+          )}
         >
           <Table
             loading={versionLoading}
@@ -422,13 +544,11 @@ const AppDetail: React.FC = () => {
             columns={[
               { title: '版本', dataIndex: 'to_version', key: 'to_version', render: (v: string, record: any) => <strong>{v || record.version}</strong> },
               { title: '更新类型', dataIndex: 'patch_type', key: 'patch_type', render: (t: string) => getUpdateTypeTag(t) },
-              { title: '更新模式', dataIndex: 'update_mode', key: 'update_mode', render: (m: string) => getUpdateModeTag(m) },
               { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => getStatusTag(s) },
               {
                 title: '灰度', dataIndex: 'rollout_percentage', key: 'rollout_percentage',
                 render: (v: number) => <Progress percent={v || 100} size="small" style={{ width: 80 }} />
               },
-              { title: '强制更新', dataIndex: 'force_update', key: 'force_update', render: (v: boolean) => v ? <Tag color="red">是</Tag> : <Tag>否</Tag> },
               {
                 title: '统计', key: 'stats',
                 render: (_: any, record: any) => (
@@ -441,9 +561,12 @@ const AppDetail: React.FC = () => {
               },
               { title: '发布时间', dataIndex: 'published_at', key: 'published_at', render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm') : '-' },
               {
-                title: '操作', key: 'action', width: 200,
+                title: '操作', key: 'action', width: 260,
                 render: (_: any, record: any) => (
                   <Space>
+                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleViewVersion(record.id)}>
+                      详情/编辑
+                    </Button>
                     {record.status === 'draft' && (
                       <>
                         <Button
@@ -558,9 +681,9 @@ const AppDetail: React.FC = () => {
 
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />
 
-      {/* 版本发布弹窗 */}
+      {/* 热更新创建弹窗 */}
       <Modal
-        title="发布新版本"
+        title="创建热更新"
         open={versionModalVisible}
         onOk={handleCreateVersion}
         onCancel={() => setVersionModalVisible(false)}
@@ -576,21 +699,10 @@ const AppDetail: React.FC = () => {
           <Form.Item name="version" label="版本号" rules={[{ required: true, message: '请输入版本号' }]}>
             <Input placeholder="如: 1.0.1" />
           </Form.Item>
-          <Form.Item name="version_code" label="版本代码" rules={[{ required: true, message: '请输入版本代码' }]}>
-            <InputNumber min={1} style={{ width: '100%' }} placeholder="如: 101（用于版本比较）" />
-          </Form.Item>
           <Form.Item name="update_type" label="更新类型" initialValue="full">
             <Select>
               <Option value="full">全量更新（完整安装包）</Option>
               <Option value="patch">增量更新（补丁包）</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="update_mode" label="更新模式" initialValue="mixed">
-            <Select>
-              <Option value="exe">程序更新</Option>
-              <Option value="script">脚本更新</Option>
-              <Option value="resource">资源更新</Option>
-              <Option value="mixed">混合更新</Option>
             </Select>
           </Form.Item>
           <Form.Item name="changelog" label="更新日志">
@@ -602,14 +714,6 @@ const AppDetail: React.FC = () => {
           <Form.Item name="min_app_version" label="最低支持版本">
             <Input placeholder="如: 1.0.0（可选）" />
           </Form.Item>
-          <Space style={{ marginBottom: 16 }}>
-            <Form.Item name="force_update" valuePropName="checked" style={{ marginBottom: 0 }}>
-              <Switch /> 强制更新
-            </Form.Item>
-            <Form.Item name="restart_required" valuePropName="checked" style={{ marginBottom: 0 }}>
-              <Switch /> 需要重启
-            </Form.Item>
-          </Space>
           <Form.Item label="更新包文件" required>
             <Upload
               fileList={versionFileList}
@@ -627,6 +731,103 @@ const AppDetail: React.FC = () => {
             </Form.Item>
           )}
         </Form>
+      </Modal>
+
+      {/* 热更新详情/编辑弹窗 */}
+      <Modal
+        title="热更新详情"
+        open={versionDetailVisible}
+        onOk={handleSaveVersionDetail}
+        onCancel={() => {
+          setVersionDetailVisible(false);
+          setCurrentVersionDetail(null);
+          setVersionLogs([]);
+          setVersionLogStatusFilter('all');
+          setVersionLogOnlyErrors(false);
+          versionDetailForm.resetFields();
+        }}
+        okText={savingVersionDetail ? '保存中...' : '保存'}
+        okButtonProps={{ loading: savingVersionDetail, disabled: versionDetailLoading || !currentVersionDetail }}
+        width={900}
+      >
+        {versionDetailLoading ? (
+          <div style={{ textAlign: 'center', padding: '32px 0' }}>
+            <Spin size="large" />
+          </div>
+        ) : currentVersionDetail ? (
+          <Tabs
+            items={[
+              {
+                key: 'info',
+                label: '基本信息',
+                children: (
+                  <>
+                    <Descriptions column={2} bordered size="small" style={{ marginBottom: 16 }}>
+                      <Descriptions.Item label="目标版本">{currentVersionDetail.to_version || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="更新类型">{getUpdateTypeTag(currentVersionDetail.patch_type)}</Descriptions.Item>
+                      <Descriptions.Item label="状态">{getStatusTag(currentVersionDetail.status)}</Descriptions.Item>
+                      <Descriptions.Item label="发布时间">{currentVersionDetail.published_at ? dayjs(currentVersionDetail.published_at).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
+                      <Descriptions.Item label="下载次数">{currentVersionDetail.download_count || 0}</Descriptions.Item>
+                      <Descriptions.Item label="更新结果">
+                        成功 {currentVersionDetail.success_count || 0} / 失败 {currentVersionDetail.fail_count || 0}
+                      </Descriptions.Item>
+                    </Descriptions>
+
+                    <Form form={versionDetailForm} layout="vertical">
+                      <Form.Item name="changelog" label="更新日志">
+                        <TextArea rows={4} placeholder="本次更新内容说明" />
+                      </Form.Item>
+                      <Form.Item name="rollout_percentage" label="灰度比例">
+                        <InputNumber min={1} max={100} addonAfter="%" style={{ width: '100%' }} />
+                      </Form.Item>
+                      <Form.Item name="min_app_version" label="最低支持版本">
+                        <Input placeholder="如: 1.0.0（可留空）" />
+                      </Form.Item>
+                    </Form>
+                  </>
+                ),
+              },
+              {
+                key: 'logs',
+                label: `更新日志 (${versionLogs.length})`,
+                children: (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginBottom: 12 }}>
+                      <Checkbox checked={versionLogOnlyErrors} onChange={handleVersionLogOnlyErrorsChange}>
+                        仅显示有错误信息
+                      </Checkbox>
+                      <Select value={versionLogStatusFilter} style={{ width: 180 }} onChange={handleVersionLogStatusChange}>
+                        <Option value="all">全部状态</Option>
+                        <Option value="failed">仅看失败</Option>
+                        <Option value="success">仅看成功</Option>
+                        <Option value="downloading">下载中</Option>
+                        <Option value="installing">安装中</Option>
+                        <Option value="rollback">已回滚</Option>
+                        <Option value="pending">待处理</Option>
+                      </Select>
+                    </div>
+                    <Table
+                      rowKey="id"
+                      loading={versionLogsLoading}
+                      dataSource={versionLogs}
+                      pagination={{ pageSize: 10 }}
+                      columns={[
+                        { title: '设备ID', dataIndex: 'device_id', key: 'device_id', ellipsis: true },
+                        { title: '机器码', dataIndex: 'machine_id', key: 'machine_id', ellipsis: true },
+                        { title: '状态', dataIndex: 'status', key: 'status', render: (status: string) => getUpdateLogStatusTag(status) },
+                        { title: '来源版本', dataIndex: 'from_version', key: 'from_version', render: (value: string) => value || '-' },
+                        { title: '目标版本', dataIndex: 'to_version', key: 'to_version', render: (value: string) => value || '-' },
+                        { title: '开始时间', dataIndex: 'started_at', key: 'started_at', render: (value: string) => value ? dayjs(value).format('MM-DD HH:mm') : '-' },
+                        { title: '完成时间', dataIndex: 'completed_at', key: 'completed_at', render: (value: string) => value ? dayjs(value).format('MM-DD HH:mm') : '-' },
+                        { title: '错误信息', dataIndex: 'error_message', key: 'error_message', ellipsis: true, render: (value: string) => value || '-' },
+                      ]}
+                    />
+                  </>
+                ),
+              },
+            ]}
+          />
+        ) : null}
       </Modal>
 
       {/* 安全脚本创建/编辑弹窗 */}
